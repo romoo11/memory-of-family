@@ -399,7 +399,14 @@ function textH(len,wPct,em){       // 글 높이 추정(%)
   return lines*(em*2.6);
 }
 function measure(src){
-  return new Promise(res=>{const i=new Image();i.onload=()=>res(i.naturalWidth/i.naturalHeight||1.4);i.onerror=()=>res(1.4);i.src=src;});
+  return new Promise(res=>{
+    let done=false; const fin=v=>{ if(!done){ done=true; res(v); } };
+    const i=new Image();
+    i.onload=()=>fin(i.naturalWidth/i.naturalHeight||1.4);
+    i.onerror=()=>fin(1.4);
+    setTimeout(()=>fin(1.4),4000);          // 사진을 못 읽어도 지면이 멈추지 않도록
+    i.src=src;
+  });
 }
 /* 자동 배치: 두 단으로 흘리되 사진마다 기울기를 준다 */
 function autoLayout(entry,photos,ratios){
@@ -463,6 +470,7 @@ function normalizeLayout(entry,photoCount){
     .filter(pg=>pg.length);
   if(!entry.layout.length) entry.layout=[[]];
 }
+const HANDLES='<div class="phandle h-size" data-h="size" title="크기">⤡</div><div class="phandle h-rot" data-h="rot" title="회전">↻</div>';
 function itemHTML(it,entry,photos){
   const st=`left:${it.x}%;top:${it.y}%;width:${it.w}%;transform:rotate(${it.rot||0}deg);${it.z?'z-index:'+it.z+';':''}`;
   const idattr=`data-k="${it.k}" data-id="${it.id||''}"`;
