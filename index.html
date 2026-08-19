@@ -715,27 +715,33 @@ function normalizeLayout(entry,photoCount){
     .filter(pg=>pg.length);
   if(!entry.layout.length) entry.layout=[[]];
 }
+const FS_BASE={'title':1.35,'text':.66,'course':.6,'covertitle':2.3,'coverregion':1.15,'coverdate':.72,'coverparty':1,'photo':.56};
+function fsStyle(cls,it){
+  const b=FS_BASE[cls]; if(!b) return '';
+  return `font-size:${(b*(it.fs||1)).toFixed(3)}em;`;
+}
 const HANDLES='<div class="phandle h-size" data-h="size" title="크기">⤡</div><div class="phandle h-rot" data-h="rot" title="회전">↻</div>';
 function itemHTML(it,entry,photos){
   const st=`left:${it.x}%;top:${it.y}%;width:${it.w}%;transform:rotate(${it.rot||0}deg);${it.z?'z-index:'+it.z+';':''}`;
   const idattr=`data-k="${it.k}" data-id="${it.id||''}"`;
+  const fsT=fsStyle('title',it), fsX=fsStyle('text',it), fsC=fsStyle('course',it);
   if(it.k==='title'){
     const n=dayIndex(entry.date), d=dayLabel(entry.date);
-    return `<div class="pitem title" ${idattr} style="${st}">${n?esc(ordinal(n))+', ':''}${esc(entry.title||'무제')}
+    return `<div class="pitem title" ${idattr} style="${st}${fsT}">${n?esc(ordinal(n))+', ':''}${esc(entry.title||'무제')}
       <span class="dsub">${esc(entry.date)} · ${esc(d.wd)}${entry.weather?' · '+entry.weather:''}${entry.mood?' · '+entry.mood:''}</span>${HANDLES}</div>`;
   }
   if(it.k==='course'){
-    return `<div class="pitem course" ${idattr} style="${st}"><b>오늘의 코스</b>${(entry.course||[]).map(esc).join(' → ')}${HANDLES}</div>`;
+    return `<div class="pitem course" ${idattr} style="${st}${fsC}"><b>오늘의 코스</b>${(entry.course||[]).map(esc).join(' → ')}${HANDLES}</div>`;
   }
   if(/^t\d+$/.test(it.k)){
     const parts=(entry.body||'').split(/\n{2,}/).map(s=>s.trim()).filter(Boolean);
     const txt=parts[+it.k.slice(1)]||'';
-    return `<div class="pitem text" ${idattr} style="${st}">${esc(txt)}${HANDLES}</div>`;
+    return `<div class="pitem text" ${idattr} style="${st}${fsX}">${esc(txt)}${HANDLES}</div>`;
   }
   const i=+it.k.slice(1), p=photos[i];
   if(!p) return '';
   return `<div class="pitem photo" ${idattr} style="${st}">
-    <figure><img src="${p.s}" alt="${esc(p.c||'')}" draggable="false">${p.c?`<figcaption>${esc(p.c)}</figcaption>`:''}</figure>${HANDLES}</div>`;
+    <figure><img src="${p.s}" alt="${esc(p.c||'')}" draggable="false">${p.c?`<figcaption style="${fsStyle('photo',it)}">${esc(p.c)}</figcaption>`:''}</figure>${HANDLES}</div>`;
 }
 function tripOwner(id){
   const t=trip(); if(!t) return null;
@@ -765,6 +771,7 @@ function tripItemHTML(it,t){
   const al=it.al==='c'?'text-align:center;':'';
   const st=`left:${it.x}%;top:${it.y}%;width:${it.w}%;transform:rotate(${it.rot||0}deg);${it.z?'z-index:'+it.z+';':''}${al}`;
   const idattr=`data-k="${it.k}" data-id="${it.id||''}"`;
+  const F=c=>fsStyle(c,it);
   if(/^c\d+$/.test(it.k)){
     const src=(t.covers||[])[+it.k.slice(1)];
     if(!src) return '';
@@ -772,17 +779,17 @@ function tripItemHTML(it,t){
   }
   if(/^n\d+$/.test(it.k)){
     const txt=(t.notes||[])[+it.k.slice(1)]||'';
-    return `<div class="pitem text" ${idattr} style="${st}">${esc(txt)}${HANDLES}</div>`;
+    return `<div class="pitem text" ${idattr} style="${st}${F('text')}">${esc(txt)}${HANDLES}</div>`;
   }
   const map={
-    't:title':`<div class="pitem covertitle" ${idattr} style="${st}">${esc(t.title||'')}${HANDLES}</div>`,
-    't:region':t.region?`<div class="pitem coverregion" ${idattr} style="${st}">(${esc(t.region)})${HANDLES}</div>`:'',
-    't:date':`<div class="pitem coverdate" ${idattr} style="${st}">${fmtRange(t.start,t.end)}${HANDLES}</div>`,
-    't:party':t.party?`<div class="pitem coverparty" ${idattr} style="${st}">${esc(t.party)}${HANDLES}</div>`:'',
-    't:head-pro':`<div class="pitem title" ${idattr} style="${st}">여행을 준비하며${HANDLES}</div>`,
-    't:head-epi':`<div class="pitem title" ${idattr} style="${st}">여행을 마치며${HANDLES}</div>`,
-    't:pro':`<div class="pitem text" ${idattr} style="${st}">${esc(t.prologue||'')}${HANDLES}</div>`,
-    't:epi':`<div class="pitem text" ${idattr} style="${st}">${esc(t.epilogue||'')}${HANDLES}</div>`
+    't:title':`<div class="pitem covertitle" ${idattr} style="${st}${F('covertitle')}">${esc(t.title||'')}${HANDLES}</div>`,
+    't:region':t.region?`<div class="pitem coverregion" ${idattr} style="${st}${F('coverregion')}">(${esc(t.region)})${HANDLES}</div>`:'',
+    't:date':`<div class="pitem coverdate" ${idattr} style="${st}${F('coverdate')}">${fmtRange(t.start,t.end)}${HANDLES}</div>`,
+    't:party':t.party?`<div class="pitem coverparty" ${idattr} style="${st}${F('coverparty')}">${esc(t.party)}${HANDLES}</div>`:'',
+    't:head-pro':`<div class="pitem title" ${idattr} style="${st}${F('title')}">여행을 준비하며${HANDLES}</div>`,
+    't:head-epi':`<div class="pitem title" ${idattr} style="${st}${F('title')}">여행을 마치며${HANDLES}</div>`,
+    't:pro':`<div class="pitem text" ${idattr} style="${st}${F('text')}">${esc(t.prologue||'')}${HANDLES}</div>`,
+    't:epi':`<div class="pitem text" ${idattr} style="${st}${F('text')}">${esc(t.epilogue||'')}${HANDLES}</div>`
   };
   return map[it.k]||'';
 }
@@ -810,7 +817,7 @@ async function renderPages(){
       <span class="grow"></span>
       <button class="btn ghost sm" data-act="print">인쇄 · PDF</button>
     </div>
-    <p class="pagehint">${state.edit?'끌면 자리가 옮겨지고, 한 번 누르면 모서리 손잡이로 크기(⤡)와 기울기(↻)를 바꿉니다. 아래 막대의 글 고치기로 제목·문단·사진 설명을 바로 수정하고(항목을 두 번 눌러도 됩니다), ↑앞 지면 · ↓뒤 지면으로 다른 지면에 옮길 수 있습니다.':'페이지에서 만드셨던 것처럼 사진과 글이 지면에 배치됩니다. 마음에 안 들면 배치를 직접 바꿀 수 있어요.'}</p>
+    <p class="pagehint">${state.edit?'끌면 자리가 옮겨지고, 한 번 누르면 모서리 손잡이로 크기(⤡)와 기울기(↻)를 바꿉니다. 아래 막대에서 글자 크기(가+/가−)와 폭을 조절하고, 글 고치기로 내용을 바로 수정합니다(항목을 두 번 눌러도 됩니다). ↑앞 지면 · ↓뒤 지면으로 다른 지면에 옮길 수 있습니다.':'페이지에서 만드셨던 것처럼 사진과 글이 지면에 배치됩니다. 마음에 안 들면 배치를 직접 바꿀 수 있어요.'}</p>
     <input id="pgphotos" type="file" accept="image/*" multiple hidden>
     <div class="pagewrap${state.edit?' editing':''}" id="pagewrap">`;
   pageSeq=[];
@@ -941,8 +948,10 @@ function showBar(){
     <button data-act="it" data-op="pgup">↑ 앞 지면</button>
     <button data-act="it" data-op="pgdn">↓ 뒤 지면</button>
     <button data-act="it" data-op="copy">복사</button>
-    <button data-act="it" data-op="w-">− 작게</button>
-    <button data-act="it" data-op="w+">+ 크게</button>
+    <button data-act="it" data-op="w-">− 폭</button>
+    <button data-act="it" data-op="w+">+ 폭</button>
+    <button data-act="it" data-op="fs-">가− 글자</button>
+    <button data-act="it" data-op="fs+">가+ 글자</button>
     <button data-act="it" data-op="r0">기울기 0</button>
     <button data-act="it" data-op="front">맨 앞</button>
     <button data-act="it" data-op="del">지면에서 빼기</button>
@@ -991,11 +1000,20 @@ async function itemOp(op){
   if(op==='w+') it.w=Math.min(92,+(it.w+4).toFixed(1));
   if(op==='w-') it.w=Math.max(12,+(it.w-4).toFixed(1));
   if(op==='r0') it.rot=0;
+  if(op==='fs+') it.fs=Math.min(3,+(((it.fs||1)+.12).toFixed(2)));
+  if(op==='fs-') it.fs=Math.max(.4,+(((it.fs||1)-.12).toFixed(2)));
   if(op==='front') it.z=Math.max(0,...pg.map(i=>i.z||0))+1;
   if(op==='edit') return;
   const el=[...$$('#pagewrap .page')].find(p=>p.dataset.entry===state.sel.entryId&&+p.dataset.page===state.sel.pageIdx)
             ?.querySelector(`.pitem[data-id="${state.sel.id}"]`);
-  if(el){ el.style.width=it.w+'%'; el.style.transform=`rotate(${it.rot||0}deg)`; if(it.z) el.style.zIndex=it.z; }
+  if(el){
+    el.style.width=it.w+'%'; el.style.transform=`rotate(${it.rot||0}deg)`; if(it.z) el.style.zIndex=it.z;
+    if(op==='fs+'||op==='fs-'){
+      const cls=['covertitle','coverregion','coverdate','coverparty','title','course','text','photo'].find(c=>el.classList.contains(c));
+      if(cls==='photo'){ const cap=el.querySelector('figcaption'); if(cap) cap.style.fontSize=(FS_BASE.photo*(it.fs||1)).toFixed(3)+'em'; }
+      else if(cls) el.style.fontSize=(FS_BASE[cls]*(it.fs||1)).toFixed(3)+'em';
+    }
+  }
   await saveLayout();
 }
 function openItemTextSheet(entry,it){
