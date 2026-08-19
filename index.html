@@ -39,6 +39,9 @@ body.home .brand .tag{display:none}
 .eyebrow::after{content:"";flex:1;height:1px;background:var(--line)}
 
 /* 목록 */
+.tripbadge{margin-top:8px;border:1px solid var(--line);background:var(--paper);border-radius:999px;
+  padding:3px 11px;font-size:12px;color:var(--navy);font-weight:700;letter-spacing:-.02em}
+.tripbadge:hover{border-color:var(--navy)}
 .yeargroup{margin-bottom:26px}
 .yearhead{display:flex;align-items:center;gap:9px;margin:0 0 12px;font-size:15px;font-weight:800;
   letter-spacing:-.03em;color:var(--navy-deep)}
@@ -309,7 +312,7 @@ const parseCourse=s=>String(s||'').split(/→|->|⇒|>>/).map(x=>x.trim()).filte
 function hash(str){let h=0;for(let i=0;i<str.length;i++)h=(h*31+str.charCodeAt(i))|0;return Math.abs(h);}
 
 /* ============ 상태 ============ */
-const state={tripId:null,tab:'pages',trips:[],entries:[],places:[],filter:'all',pickMode:false,edit:false,sel:null,photoCache:{}};
+const state={tripId:null,homeTab:'trips',hfilter:'all',allPlaces:null,tab:'pages',trips:[],entries:[],places:[],filter:'all',pickMode:false,edit:false,sel:null,photoCache:{}};
 const trip=()=>state.trips.find(t=>t.id===state.tripId);
 async function loadTrips(){state.trips=await S.get(K.trips,[]);}
 async function loadTrip(id){
@@ -327,6 +330,19 @@ async function photosOf(entryId){
 function renderHome(){
   state.tripId=null;state.edit=false;hideBar();document.body.classList.add('home');
   const list=[...state.trips].sort((a,b)=>(b.start||'').localeCompare(a.start||''));
+  view.innerHTML=`<div class="hero"><img src="${HERO}" alt="Memory of Family — 함께한 순간들이 우리의 가장 소중한 추억이 됩니다"></div>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-act="hometab" data-tab="trips" aria-selected="${state.homeTab!=='places'}">여행 ${list.length||''}</button>
+      <button class="tab" role="tab" data-act="hometab" data-tab="places" aria-selected="${state.homeTab==='places'}">다녀온 장소</button>
+    </div>
+    <div id="homepanel"></div>
+    <button class="btn fab" data-act="new-trip">+ 여행 추가</button>`;
+  if(state.homeTab==='places') renderAllPlaces(); else renderTripList(list);
+  $('#footnote').textContent = window.__memoryOnly ? '이 창을 새로 고치면 기록이 사라집니다.'
+    : window.__deviceStore ? '기록은 이 기기에 저장됩니다. 기기를 바꾸거나 브라우저 기록을 지우기 전에 데이터 메뉴에서 백업해 두세요.'
+    : '기록은 자동 저장됩니다. 데이터 메뉴에서 백업할 수 있습니다.';
+}
+function renderTripList(list){
   const groups=[];
   list.forEach(t=>{
     const y=(t.start||'').slice(0,4)||'날짜 미정';
@@ -343,17 +359,51 @@ function renderHome(){
       <div class="trip-stats"><span class="pillstat">기록 ${t.entryCount||0}</span><span class="pillstat">장소 ${t.placeCount||0}</span>${days(t.start,t.end)?`<span class="pillstat">${days(t.start,t.end)}일</span>`:''}</div>
     </div></button>`;
   };
-  view.innerHTML=`<div class="hero"><img src="${HERO}" alt="Memory of Family — 함께한 순간들이 우리의 가장 소중한 추억이 됩니다"></div>
-    <p class="eyebrow">기록한 여행 ${list.length}</p>
-    ${list.length?groups.map(g=>`<section class="yeargroup">
+  $('#homepanel').innerHTML = list.length
+    ? groups.map(g=>`<section class="yeargroup">
         <h2 class="yearhead">${g.year==='날짜 미정'?'날짜 미정':g.year+'년'}<span>${g.items.length}</span></h2>
         <div class="trip-grid">${g.items.map(card).join('')}</div>
       </section>`).join('')
-    :`<div class="empty"><strong>첫 여행일지를 시작해 보세요</strong><p>표지에 제목과 함께한 사람을 적고, 하루마다 사진과 이야기를 남기면 지면으로 배치됩니다.</p><button class="btn" data-act="new-trip">여행 추가</button></div>`}
-    <button class="btn fab" data-act="new-trip">+ 여행 추가</button>`;
-  $('#footnote').textContent = window.__memoryOnly ? '이 창을 새로 고치면 기록이 사라집니다.'
-    : window.__deviceStore ? '기록은 이 기기에 저장됩니다. 기기를 바꾸거나 브라우저 기록을 지우기 전에 데이터 메뉴에서 백업해 두세요.'
-    : '기록은 자동 저장됩니다. 데이터 메뉴에서 백업할 수 있습니다.';
+    : `<div class="empty"><strong>첫 여행일지를 시작해 보세요</strong><p>표지에 제목과 함께한 사람을 적고, 하루마다 사진과 이야기를 남기면 지면으로 배치됩니다.</p><button class="btn" data-act="new-trip">여행 추가</button></div>`;
+}
+async function loadAllPlaces(){
+  const all=[];
+  for(const t of state.trips){
+    const ps=await S.get(K.places(t.id),[]);
+    ps.forEach(p=>all.push({...p,tripId:t.id,tripTitle:t.title,tripStart:t.start||''}));
+  }
+  all.sort((a,b)=>(b.tripStart||'').localeCompare(a.tripStart||'')||a.name.localeCompare(b.name));
+  state.allPlaces=all;
+  return all;
+}
+async function renderAllPlaces(){
+  const panel=$('#homepanel');
+  panel.innerHTML='<p class="map-note">장소를 모으는 중…</p>';
+  const all=state.allPlaces||await loadAllPlaces();
+  if(!all.length){
+    panel.innerHTML='<div class="empty"><strong>아직 등록된 장소가 없습니다</strong><p>여행 안에서 숙소와 맛집을 등록하면 여기에 모두 쌓입니다.</p></div>';
+    return;
+  }
+  const counts={all:all.length};
+  Object.keys(CATS).forEach(c=>counts[c]=all.filter(p=>p.cat===c).length);
+  const f=state.hfilter||'all';
+  const list=all.filter(p=>f==='all'||p.cat===f);
+  const pts=list.filter(p=>p.lat!=null);
+  panel.innerHTML=`
+    <p class="eyebrow">모두 ${all.length}곳 · 여행 ${state.trips.length}번</p>
+    <div class="filters">${['all',...Object.keys(CATS)].map(c=>`<button class="filter" data-act="hfilter" data-cat="${c}" aria-pressed="${f===c}">${c==='all'?'전체':CATS[c].label} ${counts[c]||0}</button>`).join('')}</div>
+    ${pts.length?'<div id="map" style="margin-bottom:16px"></div><p class="map-note" id="mapnote" style="margin-bottom:16px"></p>':''}
+    <div class="place-list">${list.map(p=>`
+      <div class="place">
+        <span class="dot" style="background:${CATS[p.cat].hex}"></span>
+        <div class="place-main">
+          <h4>${esc(p.name)} <span class="cat-label">${CATS[p.cat].label}</span></h4>
+          ${p.rating?`<div class="stars">${'★'.repeat(p.rating)}${'☆'.repeat(5-p.rating)}</div>`:''}
+          ${p.note?`<p class="note">${esc(p.note)}</p>`:''}
+          <button class="tripbadge" data-act="open" data-id="${p.tripId}">${esc(p.tripTitle)} · ${fmtRange(p.tripStart,'')}</button>
+        </div>
+      </div>`).join('')}</div>`;
+  if(pts.length) mountMap(pts,false);
 }
 
 /* ============ 여행 화면 ============ */
@@ -384,7 +434,7 @@ function renderTab(){
   else{ p.innerHTML=`<div class="map-bar">
       <button class="btn ghost sm" data-act="pick" aria-pressed="${state.pickMode}">${state.pickMode?'선택 중 · 지도를 누르세요':'지도를 눌러 장소 추가'}</button>
       <button class="btn ghost sm" data-act="new-place">직접 입력</button></div>
-    <div id="map"></div><p class="map-note" id="mapnote"></p>`; mountMap(); }
+    <div id="map"></div><p class="map-note" id="mapnote"></p>`; mountMap(state.places.filter(p=>p.lat!=null),true); }
 }
 
 /* ============================================================
@@ -523,7 +573,7 @@ async function renderPages(){
       <span class="grow"></span>
       <button class="btn ghost sm" data-act="print">인쇄 · PDF</button>
     </div>
-    <p class="pagehint">${state.edit?'끌면 자리가 옮겨지고, 한 번 누르면 모서리 손잡이로 크기(⤡)와 기울기(↻)를 바꿉니다. 아래 막대의 ↑앞 지면 · ↓뒤 지면으로 다른 지면에 옮길 수 있고, 복사한 뒤 옮기면 같은 사진을 두 지면에 둘 수 있습니다.':'페이지에서 만드셨던 것처럼 사진과 글이 지면에 배치됩니다. 마음에 안 들면 배치를 직접 바꿀 수 있어요.'}</p>
+    <p class="pagehint">${state.edit?'끌면 자리가 옮겨지고, 한 번 누르면 모서리 손잡이로 크기(⤡)와 기울기(↻)를 바꿉니다. 아래 막대의 글 고치기로 제목·문단·사진 설명을 바로 수정하고(항목을 두 번 눌러도 됩니다), ↑앞 지면 · ↓뒤 지면으로 다른 지면에 옮길 수 있습니다.':'페이지에서 만드셨던 것처럼 사진과 글이 지면에 배치됩니다. 마음에 안 들면 배치를 직접 바꿀 수 있어요.'}</p>
     <div class="pagewrap${state.edit?' editing':''}" id="pagewrap">`;
   pageSeq=[];
   html+=coverPageHTML(t); pageSeq.push({type:'cover'});
@@ -611,6 +661,7 @@ function findItem(entryId,pageIdx,id){
 async function saveLayout(){ await S.set(K.entries(state.tripId),state.entries); }
 function showBar(){
   $('#bar-root').innerHTML=`<div class="itembar">
+    <button data-act="it" data-op="edit">글 고치기</button>
     <button data-act="it" data-op="pgup">↑ 앞 지면</button>
     <button data-act="it" data-op="pgdn">↓ 뒤 지면</button>
     <button data-act="it" data-op="copy">복사</button>
@@ -630,6 +681,8 @@ async function itemOp(op){
   const pg=e.layout[state.sel.pageIdx]; if(!pg) return;
   const idx=pg.findIndex(i=>i.id===state.sel.id); if(idx<0) return;
   const it=pg[idx];
+
+  if(op==='edit'){ openItemTextSheet(e,it); return; }
 
   // 지면 사이 이동 / 복사 / 빼기 — 다시 그린다
   if(op==='pgup'||op==='pgdn'||op==='copy'||op==='del'){
@@ -674,6 +727,60 @@ async function itemOp(op){
             ?.querySelector(`.pitem[data-id="${state.sel.id}"]`);
   if(el){ el.style.width=it.w+'%'; el.style.transform=`rotate(${it.rot||0}deg)`; if(it.z) el.style.zIndex=it.z; }
   await saveLayout();
+}
+function openItemTextSheet(entry,it){
+  const k=it.k;
+  if(k==='title'){
+    sheet(`<h3>제목 고치기</h3>
+      <div class="field"><label for="q-t">제목</label><input id="q-t" type="text" value="${esc(entry.title||'')}"></div>
+      <div class="field"><label for="q-d">날짜</label><input id="q-d" type="date" value="${entry.date||''}"></div>
+      <div class="sheet-actions"><button class="btn ghost" data-act="cancel">취소</button>
+        <button class="btn" data-act="save-itemtext" data-kind="title">저장</button></div>`);
+  } else if(k==='course'){
+    sheet(`<h3>오늘의 코스 고치기</h3>
+      <div class="field"><label for="q-c">코스</label><input id="q-c" type="text" value="${esc((entry.course||[]).join(' → '))}" placeholder="휴게소 → 춘천 → 숙소">
+        <p class="hint">→ 또는 -&gt; 로 구분합니다.</p></div>
+      <div class="sheet-actions"><button class="btn ghost" data-act="cancel">취소</button>
+        <button class="btn" data-act="save-itemtext" data-kind="course">저장</button></div>`);
+  } else if(/^t\d+$/.test(k)){
+    const parts=(entry.body||'').split(/\n{2,}/).map(x=>x.trim()).filter(Boolean);
+    const i=+k.slice(1);
+    sheet(`<h3>글 고치기</h3>
+      <div class="field"><label for="q-b">${i+1}번째 문단</label><textarea id="q-b" style="min-height:180px">${esc(parts[i]||'')}</textarea>
+        <p class="hint">비우고 저장하면 이 문단이 지면에서 사라집니다.</p></div>
+      <div class="sheet-actions"><button class="btn ghost" data-act="cancel">취소</button>
+        <button class="btn" data-act="save-itemtext" data-kind="body" data-i="${i}">저장</button></div>`);
+  } else if(/^p\d+$/.test(k)){
+    const i=+k.slice(1);
+    const ph=(state.photoCache[entry.id]||[])[i];
+    sheet(`<h3>사진 설명 고치기</h3>
+      ${ph?`<div style="text-align:center;margin-bottom:14px"><img src="${ph.s}" alt="" style="max-width:100%;max-height:220px;border-radius:10px"></div>`:''}
+      <div class="field"><label for="q-cap">한 줄 설명</label><textarea id="q-cap" style="min-height:80px">${esc(ph?ph.c:'')}</textarea></div>
+      <div class="sheet-actions"><button class="btn ghost" data-act="cancel">취소</button>
+        <button class="btn" data-act="save-itemtext" data-kind="cap" data-i="${i}">저장</button></div>`);
+  }
+}
+async function saveItemText(kind,i){
+  const e=state.entries.find(x=>x.id===state.sel.entryId); if(!e) return;
+  if(kind==='title'){ e.title=$('#q-t').value.trim(); e.date=$('#q-d').value||e.date; }
+  else if(kind==='course'){ e.course=parseCourse($('#q-c').value); }
+  else if(kind==='body'){
+    const parts=(e.body||'').split(/\n{2,}/).map(x=>x.trim()).filter(Boolean);
+    parts[i]=$('#q-b').value.trim();
+    e.body=parts.filter(Boolean).join('\n\n');
+    if(!parts[i]) delete e.layout;          // 문단이 사라지면 번호가 밀리므로 다시 배치
+  }
+  else if(kind==='cap'){
+    const cap=$('#q-cap').value.trim();
+    const ph=state.photoCache[e.id]; if(ph&&ph[i]){ ph[i].c=cap; await S.set(K.photos(e.id),ph); }
+    if(e.shots&&e.shots[i]) e.shots[i].c=cap;
+  }
+  state.entries.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  await S.set(K.entries(state.tripId),state.entries);
+  await syncTripMeta();
+  closeSheet(); state.sel=null; hideBar();
+  await renderPages();
+  toast('고쳤습니다.');
 }
 async function relayout(){
   if(!confirm('이 여행의 모든 지면을 자동 배치로 되돌릴까요? 직접 옮긴 배치는 사라집니다.')) return;
@@ -726,8 +833,8 @@ function loadLeaflet(){return new Promise(res=>{
   const c=document.createElement('link');c.rel='stylesheet';c.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';document.head.appendChild(c);
   const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
   s.onload=()=>res(true);s.onerror=()=>res(false);document.head.appendChild(s);setTimeout(()=>res(!!window.L),6000);});}
-async function mountMap(){
-  const pts=state.places.filter(p=>p.lat!=null),box=$('#map'); if(!box)return;
+async function mountMap(pts,allowPick){
+  const box=$('#map'); if(!box)return;
   if(!pts.length){box.outerHTML=`<div class="empty"><strong>지도에 표시할 장소가 없습니다</strong><p>장소에 위치를 넣으면 다녀온 자리가 찍힙니다.</p><button class="btn" data-act="new-place">장소 추가</button></div>`;return;}
   if(!await loadLeaflet()){box.outerHTML=fallbackMap(pts);const n=$('#mapnote');if(n)n.textContent='지도를 불러오지 못해 좌표 배치도로 표시했습니다.';return;}
   if(mapObj){mapObj.remove();mapObj=null;}
@@ -737,9 +844,9 @@ async function mountMap(){
   layer.addTo(mapObj);
   const g=[];
   pts.forEach(p=>{const icon=L.divIcon({html:`<div class="pin" style="background:${CATS[p.cat].hex}"></div>`,className:'',iconSize:[20,20],iconAnchor:[10,18]});
-    L.marker([p.lat,p.lng],{icon}).addTo(mapObj).bindPopup(`<b>${esc(p.name)}</b><br>${CATS[p.cat].label}${p.note?'<br>'+esc(p.note):''}`);g.push([p.lat,p.lng]);});
+    L.marker([p.lat,p.lng],{icon}).addTo(mapObj).bindPopup(`<b>${esc(p.name)}</b><br>${CATS[p.cat].label}${p.tripTitle?' · '+esc(p.tripTitle):''}${p.note?'<br>'+esc(p.note):''}`);g.push([p.lat,p.lng]);});
   mapObj.fitBounds(L.latLngBounds(g).pad(.25),{maxZoom:14});
-  mapObj.on('click',ev=>{if(!state.pickMode)return;state.pickMode=false;openPlaceSheet(null,{lat:+ev.latlng.lat.toFixed(5),lng:+ev.latlng.lng.toFixed(5)});});
+  if(allowPick) mapObj.on('click',ev=>{if(!state.pickMode)return;state.pickMode=false;openPlaceSheet(null,{lat:+ev.latlng.lat.toFixed(5),lng:+ev.latlng.lng.toFixed(5)});});
   const n=$('#mapnote'); if(n&&!n.textContent) n.textContent='핀 색은 분류를 뜻합니다 — 명소·맛집·숙소·카페·기타.';
 }
 function fallbackMap(pts){
@@ -890,6 +997,7 @@ function openPlaceSheet(place,preset){
   $('#p-city').addEventListener('change',ev=>{if(!ev.target.value)return;const[a,b]=ev.target.value.split(',');$('#p-lat').value=a;$('#p-lng').value=b;});
 }
 async function savePlace(id){
+  state.allPlaces=null;
   const name=$('#p-name').value.trim(); if(!name){toast('장소 이름을 입력해 주세요.');return;}
   const lat=parseFloat($('#p-lat').value),lng=parseFloat($('#p-lng').value);
   const data={name,cat:$('#modal-root').querySelector('[data-group="cat"] [aria-pressed="true"]')?.dataset.val||'etc',
@@ -900,6 +1008,7 @@ async function savePlace(id){
   closeSheet(); renderTrip(); toast('장소를 저장했습니다.');
 }
 async function delPlace(id){
+  state.allPlaces=null;
   if(!confirm('이 장소를 삭제할까요?'))return;
   state.places=state.places.filter(p=>p.id!==id);
   state.entries.forEach(e=>{if(e.placeIds)e.placeIds=e.placeIds.filter(x=>x!==id);});
@@ -967,13 +1076,16 @@ document.addEventListener('click',async ev=>{
   const el=ev.target.closest('[data-act]'); if(!el) return;
   const act=el.dataset.act,id=el.dataset.id;
   switch(act){
-    case 'home': renderHome(); break;
+    case 'home': state.allPlaces=null; renderHome(); break;
+    case 'hometab': state.homeTab=el.dataset.tab; renderHome(); break;
+    case 'hfilter': state.hfilter=el.dataset.cat; renderAllPlaces(); break;
     case 'open': await loadTrip(id); state.tab='pages'; state.filter='all'; renderTrip(); break;
     case 'tab': state.tab=el.dataset.tab; state.pickMode=false; renderTrip(); break;
     case 'filter': state.filter=el.dataset.cat; renderTab(); break;
     case 'toggle-edit': state.edit=!state.edit; renderPages(); break;
     case 'relayout': await relayout(); break;
     case 'it': await itemOp(el.dataset.op); break;
+    case 'save-itemtext': await saveItemText(el.dataset.kind, +(el.dataset.i||0)); break;
     case 'print': window.print(); break;
     case 'pick': state.pickMode=!state.pickMode; el.setAttribute('aria-pressed',state.pickMode);
       el.textContent=state.pickMode?'선택 중 · 지도를 누르세요':'지도를 눌러 장소 추가'; break;
@@ -1004,6 +1116,14 @@ document.addEventListener('click',async ev=>{
     case 'lb-prev': lbIdx=(lbIdx-1+lbPhotos.length)%lbPhotos.length; drawLB(); break;
     case 'lb-next': lbIdx=(lbIdx+1)%lbPhotos.length; drawLB(); break;
   }
+});
+document.addEventListener('dblclick',ev=>{
+  if(!state.edit||state.tab!=='pages') return;
+  const item=ev.target.closest('.pitem'); if(!item) return;
+  const page=item.closest('.page'); if(!page||!page.dataset.entry) return;
+  const e=state.entries.find(x=>x.id===page.dataset.entry);
+  const it=findItem(page.dataset.entry,+page.dataset.page,item.dataset.id);
+  if(e&&it){ state.sel={entryId:e.id,pageIdx:+page.dataset.page,id:it.id}; openItemTextSheet(e,it); }
 });
 document.addEventListener('keydown',ev=>{
   if(ev.key==='Escape'){ if(lbPhotos.length) closeLB(); else closeSheet(); }
