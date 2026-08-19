@@ -42,6 +42,20 @@ body.home .brand .tag{display:none}
 .tripbadge{margin-top:8px;border:1px solid var(--line);background:var(--paper);border-radius:999px;
   padding:3px 11px;font-size:12px;color:var(--navy);font-weight:700;letter-spacing:-.02em}
 .tripbadge:hover{border-color:var(--navy)}
+.authwrap{max-width:420px;margin:10px auto 0}
+.authwrap .card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px 20px 24px}
+.authwrap h2{margin:0 0 4px;font-size:21px;font-weight:800;letter-spacing:-.04em;color:var(--navy-deep)}
+.authwrap p.lead{margin:0 0 18px;font-size:14px;color:var(--muted)}
+.authtabs{display:flex;gap:4px;margin-bottom:18px}
+.authtabs button{flex:1;border:1px solid var(--line);background:#fff;border-radius:999px;padding:8px;font-size:14px;font-weight:700;color:var(--muted)}
+.authtabs button[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:#fff}
+.memberrow{display:flex;align-items:center;gap:10px;border:1px solid var(--line-soft);background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.memberrow .m{flex:1;min-width:0}
+.memberrow b{display:block;font-size:14.5px;letter-spacing:-.02em}
+.memberrow small{color:var(--muted);font-size:12px}
+.badge{font-size:11.5px;border-radius:999px;padding:2px 9px;font-weight:700}
+.badge.ok{background:#E4F1E8;color:#2E6B47}
+.badge.wait{background:#FBEEDC;color:#96601A}
 .yeargroup{margin-bottom:26px}
 .yearhead{display:flex;align-items:center;gap:9px;margin:0 0 12px;font-size:15px;font-weight:800;
   letter-spacing:-.03em;color:var(--navy-deep)}
@@ -246,6 +260,84 @@ body.home .brand .tag{display:none}
 <div id="modal-root"></div><div id="lb-root"></div><div id="toast"></div><div id="bar-root"></div>
 
 <script>
+/* ============ 서버 연결 (가족이 함께 보기) ============ */
+const SUPABASE_URL="";          // ← Supabase 프로젝트 URL
+const SUPABASE_ANON_KEY="";     // ← Supabase publishable(anon) 키
+let sb=null, ONLINE=false, ME=null;
+
+function loadSupabase(){
+  return new Promise(res=>{
+    if(!SUPABASE_URL||!SUPABASE_ANON_KEY) return res(false);
+    const el=document.createElement('script');
+    el.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js';
+    el.onload=()=>{ try{ sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY); res(true); }catch(e){ res(false); } };
+    el.onerror=()=>res(false);
+    setTimeout(()=>res(!!sb),8000);
+    document.head.appendChild(el);
+  });
+}
+
+/* 서버 저장소 — 기존 키 구조를 그대로 서버 표로 옮긴다 */
+const NET={
+  async get(k){
+    if(k==='tj:trips'){
+      const {data,error}=await sb.from('trips').select('data').order('start_date',{ascending:false});
+      if(error) throw error; return (data||[]).map(r=>r.data);
+    }
+    if(k.startsWith('tj:entries:')){
+      const {data,error}=await sb.from('entries').select('data').eq('trip_id',k.slice(11)).order('date');
+      if(error) throw error; return (data||[]).map(r=>r.data);
+    }
+    if(k.startsWith('tj:places:')){
+      const {data,error}=await sb.from('places').select('data').eq('trip_id',k.slice(10));
+      if(error) throw error; return (data||[]).map(r=>r.data);
+    }
+    if(k.startsWith('tj:photos:')){
+      const {data,error}=await sb.from('photos').select('idx,src,caption').eq('entry_id',k.slice(10)).order('idx');
+      if(error) throw error; return (data||[]).map(r=>({s:r.src,c:r.caption||''}));
+    }
+    return null;
+  },
+  async set(k,v){
+    if(k==='tj:trips'){
+      const rows=v.map(t=>({id:t.id,start_date:t.start||'',data:t}));
+      if(rows.length){ const {error}=await sb.from('trips').upsert(rows); if(error) throw error; }
+      const ids=v.map(t=>t.id);
+      const {data:all}=await sb.from('trips').select('id');
+      const gone=(all||[]).map(r=>r.id).filter(id=>!ids.includes(id));
+      if(gone.length) await sb.from('trips').delete().in('id',gone);
+      return true;
+    }
+    if(k.startsWith('tj:entries:')||k.startsWith('tj:places:')){
+      const isE=k.startsWith('tj:entries:');
+      const table=isE?'entries':'places', tid=k.slice(isE?11:10);
+      const rows=v.map(x=>isE?{id:x.id,trip_id:tid,date:x.date||'',data:x}:{id:x.id,trip_id:tid,data:x});
+      if(rows.length){ const {error}=await sb.from(table).upsert(rows); if(error) throw error; }
+      const ids=v.map(x=>x.id);
+      const {data:all}=await sb.from(table).select('id').eq('trip_id',tid);
+      const gone=(all||[]).map(r=>r.id).filter(id=>!ids.includes(id));
+      if(gone.length) await sb.from(table).delete().in('id',gone);
+      return true;
+    }
+    if(k.startsWith('tj:photos:')){
+      const eid=k.slice(10);
+      await sb.from('photos').delete().eq('entry_id',eid);
+      const rows=v.map((p,i)=>({id:eid+'-'+i,entry_id:eid,idx:i,src:p.s,caption:p.c||''}));
+      for(let i=0;i<rows.length;i+=4){
+        const {error}=await sb.from('photos').insert(rows.slice(i,i+4));
+        if(error) throw error;
+      }
+      return true;
+    }
+    return true;
+  },
+  async del(k){
+    if(k.startsWith('tj:photos:')) await sb.from('photos').delete().eq('entry_id',k.slice(10));
+    if(k.startsWith('tj:entries:')) await sb.from('entries').delete().eq('trip_id',k.slice(11));
+    if(k.startsWith('tj:places:')) await sb.from('places').delete().eq('trip_id',k.slice(10));
+  }
+};
+
 /* ============ 저장소 ============ */
 /* Claude 안에서는 Claude 저장소를, 웹·기기에서는 이 기기의 저장소(IndexedDB)를 쓴다 */
 if(!window.storage && window.indexedDB){
@@ -276,9 +368,18 @@ if(!window.storage){
   window.__memoryOnly=true;
 }
 const S={
-  async get(k,d=null){try{const r=await window.storage.get(k);return r&&r.value?JSON.parse(r.value):d}catch(e){return d}},
-  async set(k,v){try{const r=await window.storage.set(k,JSON.stringify(v));if(!r)throw 0;return true}catch(e){toast('저장하지 못했습니다.');return false}},
-  async del(k){try{await window.storage.delete(k)}catch(e){}}
+  async get(k,d=null){
+    if(ONLINE){ try{ const r=await NET.get(k); return r==null?d:r; }catch(e){ toast('불러오지 못했습니다. 연결을 확인해 주세요.'); return d; } }
+    try{const r=await window.storage.get(k);return r&&r.value?JSON.parse(r.value):d}catch(e){return d}
+  },
+  async set(k,v){
+    if(ONLINE){ try{ await NET.set(k,v); return true; }catch(e){ toast('저장하지 못했습니다: '+(e.message||'연결 오류')); return false; } }
+    try{const r=await window.storage.set(k,JSON.stringify(v));if(!r)throw 0;return true}catch(e){toast('저장하지 못했습니다.');return false}
+  },
+  async del(k){
+    if(ONLINE){ try{ await NET.del(k); }catch(e){} return; }
+    try{await window.storage.delete(k)}catch(e){}
+  }
 };
 const K={trips:'tj:trips',entries:i=>'tj:entries:'+i,places:i=>'tj:places:'+i,photos:i=>'tj:photos:'+i};
 
@@ -416,6 +517,83 @@ async function renderAllPlaces(){
         </div>
       </div>`).join('')}</div>`;
   if(pts.length) mountMap(pts,false);
+}
+
+/* ============ 로그인 · 가입 ============ */
+let authTab='signin';
+function renderAuth(msg){
+  document.body.classList.add('home');
+  view.innerHTML=`<div class="hero"><img src="${HERO}" alt=""></div>
+    <div class="authwrap"><div class="card">
+      <div class="authtabs">
+        <button data-act="authtab" data-t="signin" aria-pressed="${authTab==='signin'}">로그인</button>
+        <button data-act="authtab" data-t="signup" aria-pressed="${authTab==='signup'}">가입 신청</button>
+      </div>
+      ${authTab==='signup'?`
+        <h2>가족으로 가입 신청</h2>
+        <p class="lead">신청하면 관리자의 승인을 받은 뒤 여행일지를 볼 수 있습니다.</p>
+        <div class="field"><label for="a-name">이름</label><input id="a-name" type="text" placeholder="예: 장유현"></div>`
+      :`<h2>여행일지</h2><p class="lead">가족 계정으로 로그인해 주세요.</p>`}
+      <div class="field"><label for="a-mail">이메일</label><input id="a-mail" type="text" autocomplete="username"></div>
+      <div class="field"><label for="a-pw">비밀번호</label><input id="a-pw" type="password" autocomplete="current-password" placeholder="6자 이상"></div>
+      ${msg?`<p class="hint" style="color:#B4483A;margin:-6px 0 12px">${esc(msg)}</p>`:''}
+      <button class="btn" style="width:100%" data-act="${authTab==='signup'?'do-signup':'do-signin'}">${authTab==='signup'?'가입 신청':'로그인'}</button>
+    </div></div>`;
+  $('#footnote').textContent='';
+}
+function renderPending(){
+  document.body.classList.add('home');
+  view.innerHTML=`<div class="hero"><img src="${HERO}" alt=""></div>
+    <div class="authwrap"><div class="card" style="text-align:center">
+      <h2>승인을 기다리는 중입니다</h2>
+      <p class="lead">관리자가 승인하면 여행일지를 볼 수 있습니다.<br>승인 후 아래 버튼을 눌러 확인해 주세요.</p>
+      <button class="btn" data-act="recheck">확인</button>
+      <button class="btn ghost" style="margin-top:8px" data-act="signout">로그아웃</button>
+    </div></div>`;
+  $('#footnote').textContent='';
+}
+async function doSignIn(){
+  const email=$('#a-mail').value.trim(), pw=$('#a-pw').value;
+  if(!email||!pw) return renderAuth('이메일과 비밀번호를 입력해 주세요.');
+  const {error}=await sb.auth.signInWithPassword({email,password:pw});
+  if(error) return renderAuth('로그인하지 못했습니다: '+error.message);
+  await afterLogin();
+}
+async function doSignUp(){
+  const name=$('#a-name').value.trim(), email=$('#a-mail').value.trim(), pw=$('#a-pw').value;
+  if(!name||!email||pw.length<6) return renderAuth('이름·이메일·비밀번호(6자 이상)를 모두 입력해 주세요.');
+  const {data,error}=await sb.auth.signUp({email,password:pw,options:{data:{name}}});
+  if(error) return renderAuth('가입하지 못했습니다: '+error.message);
+  if(!data.session){ authTab='signin'; return renderAuth('가입 신청이 접수되었습니다. 확인 메일을 연 뒤 로그인해 주세요.'); }
+  await afterLogin();
+}
+async function afterLogin(){
+  const {data:{user}}=await sb.auth.getUser();
+  if(!user) return renderAuth();
+  let {data}=await sb.rpc('my_status');
+  let row=(data&&data[0])||null;
+  if(!row){
+    await sb.rpc('request_join',{display_name:user.user_metadata?.name||user.email,mail:user.email});
+    const r=await sb.rpc('my_status'); row=(r.data&&r.data[0])||null;
+  }
+  ME=row||{status:'pending',role:'member'};
+  if(ME.status!=='approved') return renderPending();
+  state.allPlaces=null;
+  await loadTrips(); renderHome();
+}
+async function openMembers(){
+  const {data,error}=await sb.rpc('list_members');
+  if(error) return toast('명단을 불러오지 못했습니다.');
+  const rows=data||[];
+  sheet(`<h3>가족 관리</h3>
+    <p class="hint" style="margin:-6px 0 16px">가입 신청을 승인하면 여행일지를 볼 수 있습니다.</p>
+    ${rows.map(m=>`<div class="memberrow">
+      <div class="m"><b>${esc(m.name||'이름 없음')}</b><small>${esc(m.email||'')}</small></div>
+      <span class="badge ${m.status==='approved'?'ok':'wait'}">${m.status==='approved'?'승인됨':'대기'}</span>
+      ${m.role==='admin'?'<span class="badge ok">관리자</span>':
+        `<button class="btn ghost sm" data-act="setmember" data-uid="${m.user_id}" data-st="${m.status==='approved'?'pending':'approved'}">${m.status==='approved'?'보류':'승인'}</button>`}
+    </div>`).join('')||'<p class="hint">아직 신청한 사람이 없습니다.</p>'}
+    <div class="sheet-actions"><button class="btn" data-act="cancel">닫기</button></div>`);
 }
 
 /* ============ 여행 화면 ============ */
@@ -1148,6 +1326,10 @@ function openDataSheet(){
     <div class="sheet-actions" style="justify-content:flex-start">
       <button class="btn ghost" data-act="export">백업 내보내기</button>
       <label class="btn ghost" for="f-import" style="display:inline-block">백업 불러오기<input id="f-import" type="file" accept="application/json" hidden></label></div>
+    ${ONLINE?`<div class="sheet-actions" style="justify-content:flex-start">
+        ${ME&&ME.role==='admin'?`<button class="btn ghost" data-act="members">가족 관리</button>`:''}
+        <button class="btn ghost" data-act="signout">로그아웃</button>
+      </div>`:''}
     <div class="sheet-actions"><button class="btn" data-act="cancel">닫기</button></div>`);
   $('#f-import').addEventListener('change',onImport);
 }
@@ -1186,6 +1368,17 @@ document.addEventListener('click',async ev=>{
   const act=el.dataset.act,id=el.dataset.id;
   switch(act){
     case 'home': state.allPlaces=null; renderHome(); break;
+    case 'authtab': authTab=el.dataset.t; renderAuth(); break;
+    case 'do-signin': await doSignIn(); break;
+    case 'do-signup': await doSignUp(); break;
+    case 'recheck': await afterLogin(); break;
+    case 'signout': await sb.auth.signOut(); ME=null; closeSheet(); authTab='signin'; renderAuth(); break;
+    case 'members': await openMembers(); break;
+    case 'setmember': {
+      const {error}=await sb.rpc('set_member_status',{target:el.dataset.uid,new_status:el.dataset.st});
+      if(error) toast('바꾸지 못했습니다.'); else { toast(el.dataset.st==='approved'?'승인했습니다.':'보류로 바꿨습니다.'); await openMembers(); }
+      break;
+    }
     case 'hometab': state.homeTab=el.dataset.tab; renderHome(); break;
     case 'hfilter': state.hfilter=el.dataset.cat; renderAllPlaces(); break;
     case 'open': await loadTrip(id); state.tab='pages'; state.filter='all'; renderTrip(); break;
@@ -1255,6 +1448,13 @@ document.addEventListener('keydown',ev=>{
 
 (async function init(){
   view.innerHTML='<p class="eyebrow">불러오는 중</p>';
+  if(await loadSupabase()){
+    ONLINE=true;
+    sb.auth.onAuthStateChange((ev)=>{ if(ev==='SIGNED_OUT'){ ME=null; renderAuth(); } });
+    const {data:{session}}=await sb.auth.getSession();
+    if(!session) return renderAuth();
+    return afterLogin();
+  }
   await loadTrips(); renderHome();
 })();
 </script>
