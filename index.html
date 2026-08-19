@@ -93,6 +93,11 @@ body.home .brand .tag{display:none}
 .pitem.title .dsub{display:block;font-size:.42em;font-weight:700;letter-spacing:0;color:var(--navy-deep);opacity:.72;margin-top:.5em}
 .pitem.course{font-size:.6em;font-weight:700;color:var(--navy-deep);background:rgba(255,255,255,.72);border-radius:.5em;padding:.6em .8em;line-height:1.7}
 .pitem.course b{display:block;font-size:.85em;opacity:.65;margin-bottom:.25em;letter-spacing:.04em}
+.pagetools{display:none;position:absolute;top:10px;right:10px;gap:6px;z-index:70}
+.editing .pagetools{display:flex}
+.pagetools button{border:0;background:rgba(18,53,102,.88);color:#fff;border-radius:999px;
+  padding:6px 11px;font-size:12.5px;font-weight:700;box-shadow:0 3px 10px rgba(18,53,102,.3)}
+.pagetools button:hover{background:var(--navy)}
 .editing .pitem{cursor:grab;touch-action:none}
 .editing .pitem::after{content:"";position:absolute;inset:-4px;border:1px dashed rgba(27,78,150,.35);border-radius:4px;pointer-events:none}
 .editing .pitem.sel::after{border:2px solid var(--navy);background:rgba(27,78,150,.06)}
@@ -192,6 +197,13 @@ body.home .brand .tag{display:none}
 .opt[aria-pressed="true"]{border-color:var(--navy);background:var(--navy);color:#fff;font-weight:700}
 .sheet-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap}
 .filedrop{display:block;border:1px dashed var(--line);border-radius:10px;padding:14px;text-align:center;background:#fff;font-size:13.5px;color:var(--muted)}
+.coverpick{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:7px;max-height:230px;
+  overflow-y:auto;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px}
+.cpick{position:relative;padding:0;border:2px solid transparent;border-radius:8px;overflow:hidden;background:none;line-height:0}
+.cpick img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
+.cpick.on{border-color:var(--navy)}
+.cpick span{position:absolute;top:3px;left:3px;background:var(--navy);color:#fff;font-size:11px;
+  width:18px;height:18px;border-radius:50%;display:grid;place-items:center;line-height:1}
 .pvlist{display:grid;gap:8px;margin-top:10px}
 .pvrow{display:flex;gap:9px;align-items:center;background:#fff;border:1px solid var(--line-soft);border-radius:10px;padding:7px}
 .pvrow img{width:62px;height:62px;object-fit:cover;border-radius:7px;flex-shrink:0}
@@ -544,7 +556,7 @@ function itemHTML(it,entry,photos){
 }
 function coverPageHTML(t){
   const cv=(t.covers||[]).slice(0,3);
-  return `<div class="page" data-cover="1"><div class="inner"><div class="coverpage">
+  return `<div class="page" data-cover="1"><div class="pagetools"><button data-act="edit-trip">표지 고치기</button></div><div class="inner"><div class="coverpage">
     ${cv.length?`<div class="collage">
       ${cv[0]?`<figure class="c1"><img src="${cv[0]}" alt=""></figure>`:''}
       ${cv[1]?`<figure class="c2"><img src="${cv[1]}" alt=""></figure>`:''}
@@ -558,7 +570,7 @@ function coverPageHTML(t){
   </div></div></div>`;
 }
 function proseCage(title,text){
-  return `<div class="page"><div class="inner">
+  return `<div class="page"><div class="pagetools"><button data-act="edit-trip">글 고치기</button></div><div class="inner">
     <div class="pitem title" style="left:8%;top:12%;width:84%">${esc(title)}</div>
     <div class="pitem text" style="left:10%;top:26%;width:76%;font-size:.74em">${esc(text)}</div>
   </div></div>`;
@@ -574,6 +586,7 @@ async function renderPages(){
       <button class="btn ghost sm" data-act="print">인쇄 · PDF</button>
     </div>
     <p class="pagehint">${state.edit?'끌면 자리가 옮겨지고, 한 번 누르면 모서리 손잡이로 크기(⤡)와 기울기(↻)를 바꿉니다. 아래 막대의 글 고치기로 제목·문단·사진 설명을 바로 수정하고(항목을 두 번 눌러도 됩니다), ↑앞 지면 · ↓뒤 지면으로 다른 지면에 옮길 수 있습니다.':'페이지에서 만드셨던 것처럼 사진과 글이 지면에 배치됩니다. 마음에 안 들면 배치를 직접 바꿀 수 있어요.'}</p>
+    <input id="pgphotos" type="file" accept="image/*" multiple hidden>
     <div class="pagewrap${state.edit?' editing':''}" id="pagewrap">`;
   pageSeq=[];
   html+=coverPageHTML(t); pageSeq.push({type:'cover'});
@@ -584,13 +597,19 @@ async function renderPages(){
     if(!layoutValid(e.layout)) e.layout=autoLayout(e,photos,ratios);
     normalizeLayout(e,photos.length);
     e.layout.forEach((items,pi)=>{
-      html+=`<div class="page" data-entry="${e.id}" data-page="${pi}"><div class="inner">${items.map(it=>itemHTML(it,e,photos)).join('')}</div><div class="pnum">${e.date}</div></div>`;
+      html+=`<div class="page" data-entry="${e.id}" data-page="${pi}">
+        <div class="pagetools">
+          <button data-act="add-photo" data-id="${e.id}" data-page="${pi}">+ 사진</button>
+          <button data-act="add-text" data-id="${e.id}" data-page="${pi}">+ 글</button>
+        </div>
+        <div class="inner">${items.map(it=>itemHTML(it,e,photos)).join('')}</div><div class="pnum">${e.date}</div></div>`;
       pageSeq.push({type:'day',entryId:e.id,pageIdx:pi});
     });
   }
   if(t.epilogue){ html+=proseCage('여행을 마치며',t.epilogue); pageSeq.push({type:'prose'}); }
   html+='</div>';
   panel.innerHTML=html;
+  const fi=$('#pgphotos'); if(fi) fi.addEventListener('change',onAddPhotos);
   scalePages();
   await S.set(K.entries(state.tripId),state.entries);
 }
@@ -782,6 +801,63 @@ async function saveItemText(kind,i){
   await renderPages();
   toast('고쳤습니다.');
 }
+async function addItemToPage(entryId,pageIdx,item){
+  const e=state.entries.find(x=>x.id===entryId); if(!e) return;
+  if(!e.layout) e.layout=[[]];
+  while(e.layout.length<=pageIdx) e.layout.push([]);
+  const used=e.layout[pageIdx].length;
+  e.layout[pageIdx].push(Object.assign({id:uid(),
+    x:8+(used%2)*44, y:Math.min(78,8+((used*9)%76)), w:42,
+    rot:((used*7)%9-4)*0.8, z:Math.max(0,...e.layout[pageIdx].map(i=>i.z||0))+1}, item));
+  await S.set(K.entries(state.tripId),state.entries);
+}
+async function onAddPhotos(ev){
+  const files=[...ev.target.files]; ev.target.value=''; if(!files.length) return;
+  const tgt=state.addTarget; if(!tgt) return;
+  toast('사진을 정리하는 중…');
+  const e=state.entries.find(x=>x.id===tgt.entryId); if(!e) return;
+  const photos=await photosOf(e.id);
+  let added=0;
+  for(const f of files){
+    try{
+      const src=await readImage(f,1200,.72);
+      photos.push({s:src,c:''});
+      await addItemToPage(e.id,tgt.pageIdx,{k:'p'+(photos.length-1)});
+      added++;
+    }catch(err){ toast('사진 한 장을 읽지 못했습니다.'); }
+  }
+  if(!added) return;
+  state.photoCache[e.id]=photos;
+  e.photoCount=photos.length;
+  e.shots=[];
+  for(const ph of photos.slice(0,3)) e.shots.push({s:(await shrink(ph.s,320,.6))||ph.s,c:ph.c||''});
+  await S.set(K.photos(e.id),photos);
+  await S.set(K.entries(state.tripId),state.entries);
+  await syncTripMeta();
+  await renderPages();
+  toast(`사진 ${added}장을 이 지면에 넣었습니다. 끌어서 자리를 잡아 주세요.`);
+}
+function openAddTextSheet(entryId,pageIdx){
+  state.addTarget={entryId,pageIdx};
+  sheet(`<h3>글 추가</h3>
+    <div class="field"><label for="q-new">이 지면에 넣을 글</label>
+      <textarea id="q-new" style="min-height:150px" placeholder="사진 옆에 붙일 이야기를 적어 주세요."></textarea>
+      <p class="hint">이 날짜의 이야기 맨 뒤에 새 문단으로 더해지고, 지금 보고 있는 지면에 놓입니다.</p></div>
+    <div class="sheet-actions"><button class="btn ghost" data-act="cancel">취소</button>
+      <button class="btn" data-act="save-newtext">넣기</button></div>`);
+}
+async function saveNewText(){
+  const tgt=state.addTarget; if(!tgt) return;
+  const txt=$('#q-new').value.trim(); if(!txt){ toast('내용을 적어 주세요.'); return; }
+  const e=state.entries.find(x=>x.id===tgt.entryId); if(!e) return;
+  const parts=(e.body||'').split(/\n{2,}/).map(x=>x.trim()).filter(Boolean);
+  parts.push(txt);
+  e.body=parts.join('\n\n');
+  await addItemToPage(e.id,tgt.pageIdx,{k:'t'+(parts.length-1)});
+  await S.set(K.entries(state.tripId),state.entries);
+  closeSheet(); await renderPages();
+  toast('글을 넣었습니다. 끌어서 자리를 잡아 주세요.');
+}
 async function relayout(){
   if(!confirm('이 여행의 모든 지면을 자동 배치로 되돌릴까요? 직접 옮긴 배치는 사라집니다.')) return;
   state.entries.forEach(e=>{ delete e.layout; });
@@ -868,10 +944,15 @@ function readImage(file,max,q){return new Promise((res,rej)=>{const fr=new FileR
     const c=document.createElement('canvas');c.width=Math.round(img.width*sc);c.height=Math.round(img.height*sc);
     c.getContext('2d').drawImage(img,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',q));};
     img.onerror=()=>rej(0);img.src=fr.result;};fr.onerror=()=>rej(0);fr.readAsDataURL(file);});}
-function shrink(u,size,q){return new Promise(res=>{const img=new Image();
+function shrink(u,size,q){return new Promise(res=>{
+  let done=false; const fin=v=>{ if(!done){ done=true; res(v); } };
+  const img=new Image();
   img.onload=()=>{const sc=Math.min(1,size/Math.max(img.width,img.height));const c=document.createElement('canvas');
     c.width=Math.round(img.width*sc);c.height=Math.round(img.height*sc);c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-    res(c.toDataURL('image/jpeg',q));};img.onerror=()=>res('');img.src=u;});}
+    fin(c.toDataURL('image/jpeg',q));};
+  img.onerror=()=>fin('');
+  setTimeout(()=>fin(''),4000);
+  img.src=u;});}
 
 /* ============ 모달 ============ */
 function closeSheet(){$('#modal-root').innerHTML='';}
@@ -880,6 +961,7 @@ function sheet(h){$('#modal-root').innerHTML=`<div class="overlay" data-act="ove
 
 function openTripSheet(t){
   const e=t||{title:'',region:'',party:'',start:today(),end:'',prologue:'',epilogue:''};
+  coverPicks=(t&&t.coverRefs)?[...t.coverRefs]:[];
   sheet(`<h3>${t?'표지·서문 수정':'새 여행일지'}</h3>
     <div class="field"><label for="f-title">제목</label><input id="f-title" type="text" value="${esc(e.title)}" placeholder="예: 여름 가족 여행"></div>
     <div class="field"><label for="f-region">지역</label><input id="f-region" type="text" value="${esc(e.region)}" placeholder="예: 경기도 양평, 인천 영종도"></div>
@@ -888,13 +970,40 @@ function openTripSheet(t){
     <div class="field"><label for="f-party">함께한 사람</label><textarea id="f-party" style="min-height:64px" placeholder="장상원 최난경&#10;장유현 장유정">${esc(e.party)}</textarea></div>
     <div class="field"><label for="f-pro">여행을 준비하며</label><textarea id="f-pro">${esc(e.prologue)}</textarea></div>
     <div class="field"><label for="f-epi">여행을 마치며</label><textarea id="f-epi" style="min-height:80px">${esc(e.epilogue)}</textarea></div>
+    ${t?`<div class="field"><label>표지 사진 (최대 3장)</label><div class="coverpick" id="coverpick">사진을 불러오는 중…</div>
+      <p class="hint">고른 순서대로 표지에 놓입니다. 아무것도 고르지 않으면 기록의 앞선 사진이 자동으로 올라갑니다.</p></div>`:''}
     <div class="sheet-actions">${t?`<button class="btn danger sm" data-act="del-trip">여행 삭제</button>`:''}
       <button class="btn ghost" data-act="cancel">취소</button><button class="btn" data-act="save-trip" data-id="${t?t.id:''}">저장</button></div>`);
+  if(t) drawCoverPick();
+}
+let coverPicks=[];
+async function drawCoverPick(){
+  const box=$('#coverpick'); if(!box) return;
+  const rows=[];
+  for(const e of state.entries){
+    const ph=await photosOf(e.id);
+    ph.forEach((p,i)=>rows.push({eid:e.id,i,src:p.s,date:e.date}));
+  }
+  if(!rows.length){ box.textContent='아직 사진이 없습니다.'; return; }
+  box.innerHTML=rows.map(r=>{
+    const on=coverPicks.some(c=>c.eid===r.eid&&c.i===r.i);
+    const n=coverPicks.findIndex(c=>c.eid===r.eid&&c.i===r.i);
+    return `<button type="button" class="cpick${on?' on':''}" data-act="pickcover" data-eid="${r.eid}" data-i="${r.i}">
+      <img src="${r.src}" alt="">${on?`<span>${n+1}</span>`:''}</button>`;
+  }).join('');
 }
 async function saveTrip(id){
   const title=$('#f-title').value.trim(); if(!title){toast('여행 제목을 입력해 주세요.');return;}
   const data={title,region:$('#f-region').value.trim(),party:$('#f-party').value.trim(),start:$('#f-start').value,end:$('#f-end').value,
     prologue:$('#f-pro').value.trim(),epilogue:$('#f-epi').value.trim()};
+  if(id&&coverPicks.length){
+    const covers=[];
+    for(const c of coverPicks.slice(0,3)){
+      const ph=(await photosOf(c.eid))[c.i];
+      if(ph) covers.push((await shrink(ph.s,320,.6))||ph.s);
+    }
+    data.covers=covers; data.coverRefs=[...coverPicks]; data.coverFixed=true;
+  }
   if(id) Object.assign(state.trips.find(t=>t.id===id),data);
   else{const t={id:uid(),entryCount:0,placeCount:0,covers:[],...data};state.trips.push(t);state.tripId=t.id;}
   await S.set(K.trips,state.trips); closeSheet();
@@ -1086,6 +1195,17 @@ document.addEventListener('click',async ev=>{
     case 'relayout': await relayout(); break;
     case 'it': await itemOp(el.dataset.op); break;
     case 'save-itemtext': await saveItemText(el.dataset.kind, +(el.dataset.i||0)); break;
+    case 'add-photo': state.addTarget={entryId:id,pageIdx:+el.dataset.page}; $('#pgphotos')?.click(); break;
+    case 'add-text': openAddTextSheet(id,+el.dataset.page); break;
+    case 'save-newtext': await saveNewText(); break;
+    case 'pickcover': {
+      const eid=el.dataset.eid, i=+el.dataset.i;
+      const at=coverPicks.findIndex(c=>c.eid===eid&&c.i===i);
+      if(at>=0) coverPicks.splice(at,1);
+      else if(coverPicks.length>=3) toast('표지 사진은 3장까지입니다.');
+      else coverPicks.push({eid,i});
+      drawCoverPick(); break;
+    }
     case 'print': window.print(); break;
     case 'pick': state.pickMode=!state.pickMode; el.setAttribute('aria-pressed',state.pickMode);
       el.textContent=state.pickMode?'선택 중 · 지도를 누르세요':'지도를 눌러 장소 추가'; break;
