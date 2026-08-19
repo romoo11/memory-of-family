@@ -791,6 +791,23 @@ async function renderPages(){
   scalePages();
   await S.set(K.entries(state.tripId),state.entries);
 }
+async function rerenderPages(keepSel,scrollToSel){
+  const y=window.scrollY, sel=state.sel?{...state.sel}:null;
+  await renderPages();
+  window.scrollTo(0,y);
+  if(keepSel&&sel){
+    state.sel=sel;
+    const el=[...$$('#pagewrap .page')].find(p=>p.dataset.entry===sel.entryId&&+p.dataset.page===sel.pageIdx)
+      ?.querySelector(`.pitem[data-id="${sel.id}"]`);
+    if(el){
+      el.classList.add('sel'); showBar();
+      if(scrollToSel){
+        const r=el.getBoundingClientRect();
+        if(r.top<70||r.bottom>window.innerHeight-90) el.scrollIntoView({block:'center',behavior:'smooth'});
+      }
+    }else{ state.sel=null; hideBar(); }
+  }
+}
 function scalePages(){
   $$('#pagewrap .page').forEach(p=>{ p.style.fontSize=(p.clientWidth*0.0265)+'px'; });
 }
@@ -907,12 +924,7 @@ async function itemOp(op){
       toast(dir<0?'앞 지면으로 옮겼습니다.':'뒤 지면으로 옮겼습니다.');
     }
     await saveLayout();
-    await renderPages();
-    if(state.sel){
-      const el=[...$$('#pagewrap .page')].find(p=>p.dataset.entry===state.sel.entryId&&+p.dataset.page===state.sel.pageIdx)
-        ?.querySelector(`.pitem[data-id="${state.sel.id}"]`);
-      if(el){ el.classList.add('sel'); showBar(); el.scrollIntoView({block:'center',behavior:'smooth'}); }
-    }
+    await rerenderPages(!!state.sel, op==='pgup'||op==='pgdn');
     return;
   }
 
@@ -975,8 +987,8 @@ async function saveItemText(kind,i){
   state.entries.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
   await S.set(K.entries(state.tripId),state.entries);
   await syncTripMeta();
-  closeSheet(); state.sel=null; hideBar();
-  await renderPages();
+  closeSheet();
+  await rerenderPages(true,false);
   toast('고쳤습니다.');
 }
 async function addItemToPage(entryId,pageIdx,item){
@@ -1012,7 +1024,7 @@ async function onAddPhotos(ev){
   await S.set(K.photos(e.id),photos);
   await S.set(K.entries(state.tripId),state.entries);
   await syncTripMeta();
-  await renderPages();
+  await rerenderPages(false);
   toast(`사진 ${added}장을 이 지면에 넣었습니다. 끌어서 자리를 잡아 주세요.`);
 }
 function openAddTextSheet(entryId,pageIdx){
@@ -1033,7 +1045,7 @@ async function saveNewText(){
   e.body=parts.join('\n\n');
   await addItemToPage(e.id,tgt.pageIdx,{k:'t'+(parts.length-1)});
   await S.set(K.entries(state.tripId),state.entries);
-  closeSheet(); await renderPages();
+  closeSheet(); await rerenderPages(false);
   toast('글을 넣었습니다. 끌어서 자리를 잡아 주세요.');
 }
 async function relayout(){
@@ -1185,7 +1197,7 @@ async function saveTrip(id){
   if(id) Object.assign(state.trips.find(t=>t.id===id),data);
   else{const t={id:uid(),entryCount:0,placeCount:0,covers:[],...data};state.trips.push(t);state.tripId=t.id;}
   await S.set(K.trips,state.trips); closeSheet();
-  if(id){renderTrip();toast('저장했습니다.');}
+  if(id){const y=window.scrollY; renderTrip(); setTimeout(()=>window.scrollTo(0,y),60); toast('저장했습니다.');}
   else{await loadTrip(state.tripId);state.tab='pages';renderTrip();toast('여행일지를 만들었습니다.');}
 }
 async function deleteTrip(){
@@ -1260,7 +1272,7 @@ async function saveEntry(id){
   const okP=workPhotos.length?await S.set(K.photos(entry.id),state.photoCache[entry.id]):(await S.del(K.photos(entry.id)),true);
   const ok=await S.set(K.entries(state.tripId),state.entries);
   await syncTripMeta();
-  if(ok&&okP){ closeSheet(); renderTrip(); toast('기록을 저장했습니다.'); }
+  if(ok&&okP){ const y=window.scrollY; closeSheet(); renderTrip(); setTimeout(()=>window.scrollTo(0,y),60); toast('기록을 저장했습니다.'); }
 }
 async function delEntry(id){
   if(!confirm('이 기록과 사진을 삭제할까요?'))return;
@@ -1292,7 +1304,7 @@ async function savePlace(id){
     note:$('#p-note').value.trim(),lat:isNaN(lat)?null:lat,lng:isNaN(lng)?null:lng};
   if(id) Object.assign(state.places.find(p=>p.id===id),data); else state.places.push({id:uid(),...data});
   await S.set(K.places(state.tripId),state.places); await syncTripMeta();
-  closeSheet(); renderTrip(); toast('장소를 저장했습니다.');
+  const y=window.scrollY; closeSheet(); renderTrip(); setTimeout(()=>window.scrollTo(0,y),60); toast('장소를 저장했습니다.');
 }
 async function delPlace(id){
   state.allPlaces=null;
