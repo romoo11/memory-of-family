@@ -39,6 +39,12 @@ body.home .brand .tag{display:none}
 .eyebrow::after{content:"";flex:1;height:1px;background:var(--line)}
 
 /* 목록 */
+.yeargroup{margin-bottom:26px}
+.yearhead{display:flex;align-items:center;gap:9px;margin:0 0 12px;font-size:15px;font-weight:800;
+  letter-spacing:-.03em;color:var(--navy-deep)}
+.yearhead span{font-family:var(--mono);font-size:11px;font-weight:400;color:var(--muted);
+  border:1px solid var(--line);border-radius:999px;padding:1px 8px}
+.yearhead::after{content:"";flex:1;height:1px;background:var(--line)}
 .hero{position:relative;margin:0 -18px 24px;overflow:hidden;background:#DCEAF4}
 .hero img{display:block;width:100%;height:auto}
 @media(min-width:940px){.hero{margin:0 0 24px;border-radius:16px;box-shadow:0 10px 30px rgba(18,53,102,.14)}}
@@ -94,7 +100,10 @@ body.home .brand .tag{display:none}
 .phandle.h-size{right:-15px;bottom:-15px;cursor:nwse-resize}
 .phandle.h-rot{right:-15px;top:-15px;cursor:grab}
 .itembar{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:60;background:var(--navy-deep);
-  border-radius:999px;padding:6px;display:flex;gap:4px;box-shadow:0 8px 22px rgba(18,53,102,.35)}
+  border-radius:999px;padding:6px;display:flex;gap:4px;box-shadow:0 8px 22px rgba(18,53,102,.35);
+  max-width:min(94vw,760px);overflow-x:auto;scrollbar-width:none}
+.itembar::-webkit-scrollbar{display:none}
+.itembar button{white-space:nowrap;flex:0 0 auto}
 .itembar button{border:0;background:rgba(255,255,255,.14);color:#fff;border-radius:999px;padding:7px 12px;font-size:13px;font-weight:700}
 .itembar button:hover{background:rgba(255,255,255,.28)}
 
@@ -318,16 +327,28 @@ async function photosOf(entryId){
 function renderHome(){
   state.tripId=null;state.edit=false;hideBar();document.body.classList.add('home');
   const list=[...state.trips].sort((a,b)=>(b.start||'').localeCompare(a.start||''));
+  const groups=[];
+  list.forEach(t=>{
+    const y=(t.start||'').slice(0,4)||'날짜 미정';
+    let g=groups.find(x=>x.year===y);
+    if(!g){ g={year:y,items:[]}; groups.push(g); }
+    g.items.push(t);
+  });
+  const card=t=>{
+    const th=(t.covers||[]).slice(0,2);
+    return `<button class="trip-card" data-act="open" data-id="${t.id}">
+      <div class="mini-cover">${th.length?th.map(s=>`<img src="${s}" alt="">`).join(''):'<div class="noimg">사진을 넣으면 표지가 채워집니다</div>'}</div>
+      <div class="trip-body"><h3>${esc(t.title)}</h3>
+      <div class="trip-meta">${fmtRange(t.start,t.end)}${t.region?' · '+esc(t.region):''}</div>
+      <div class="trip-stats"><span class="pillstat">기록 ${t.entryCount||0}</span><span class="pillstat">장소 ${t.placeCount||0}</span>${days(t.start,t.end)?`<span class="pillstat">${days(t.start,t.end)}일</span>`:''}</div>
+    </div></button>`;
+  };
   view.innerHTML=`<div class="hero"><img src="${HERO}" alt="Memory of Family — 함께한 순간들이 우리의 가장 소중한 추억이 됩니다"></div>
     <p class="eyebrow">기록한 여행 ${list.length}</p>
-    ${list.length?`<div class="trip-grid">${list.map(t=>{
-      const th=(t.covers||[]).slice(0,2);
-      return `<button class="trip-card" data-act="open" data-id="${t.id}">
-        <div class="mini-cover">${th.length?th.map(s=>`<img src="${s}" alt="">`).join(''):'<div class="noimg">사진을 넣으면 표지가 채워집니다</div>'}</div>
-        <div class="trip-body"><h3>${esc(t.title)}</h3>
-        <div class="trip-meta">${fmtRange(t.start,t.end)}${t.region?' · '+esc(t.region):''}</div>
-        <div class="trip-stats"><span class="pillstat">기록 ${t.entryCount||0}</span><span class="pillstat">장소 ${t.placeCount||0}</span>${days(t.start,t.end)?`<span class="pillstat">${days(t.start,t.end)}일</span>`:''}</div>
-      </div></button>`;}).join('')}</div>`
+    ${list.length?groups.map(g=>`<section class="yeargroup">
+        <h2 class="yearhead">${g.year==='날짜 미정'?'날짜 미정':g.year+'년'}<span>${g.items.length}</span></h2>
+        <div class="trip-grid">${g.items.map(card).join('')}</div>
+      </section>`).join('')
     :`<div class="empty"><strong>첫 여행일지를 시작해 보세요</strong><p>표지에 제목과 함께한 사람을 적고, 하루마다 사진과 이야기를 남기면 지면으로 배치됩니다.</p><button class="btn" data-act="new-trip">여행 추가</button></div>`}
     <button class="btn fab" data-act="new-trip">+ 여행 추가</button>`;
   $('#footnote').textContent = window.__memoryOnly ? '이 창을 새로 고치면 기록이 사라집니다.'
@@ -403,7 +424,7 @@ function autoLayout(entry,photos,ratios){
   function newPage(){ if(items.length) pages.push(items); items=[]; col=[M.t,M.t]; first=false; }
   // 머리(제목·코스)는 첫 페이지 상단 전체 폭
   head.forEach(b=>{
-    items.push({k:b.k,x:M.l,y:col[0],w:100-M.l-M.r,rot:0});
+    items.push({id:uid(),k:b.k,x:M.l,y:col[0],w:100-M.l-M.r,rot:0});
     col[0]+=b.h+1.6; col[1]=col[0];
   });
   let idx=0;
@@ -425,38 +446,42 @@ function autoLayout(entry,photos,ratios){
     const x2 = Math.max(M.l-2, Math.min(100-M.r-w+2,
       (c2===0? M.l : 100-M.r-w) + (((seed+idx*7)%5)-2)*0.5));
     const rot = b.k[0]==='p' ? (((seed+idx*13)%9)-4)*0.9 : 0;
-    items.push({k:b.k,x:+x2.toFixed(2),y:+col[c2].toFixed(2),w:+w.toFixed(2),rot:+rot.toFixed(2)});
+    items.push({id:uid(),k:b.k,x:+x2.toFixed(2),y:+col[c2].toFixed(2),w:+w.toFixed(2),rot:+rot.toFixed(2)});
     col[c2]+=h+2.2;
     idx++;
   }
   if(items.length) pages.push(items);
   return pages;
 }
-function layoutValid(layout,entry,photoCount){
-  if(!layout||!Array.isArray(layout)||!layout.length) return false;
-  const keys=new Set(); layout.forEach(pg=>pg.forEach(it=>keys.add(it.k)));
-  for(let i=0;i<photoCount;i++) if(!keys.has('p'+i)) return false;
-  return true;
+function layoutValid(layout){
+  return Array.isArray(layout) && layout.length>0 && layout.every(pg=>Array.isArray(pg));
 }
-const HANDLES='<div class="phandle h-size" data-h="size" title="크기">⤡</div><div class="phandle h-rot" data-h="rot" title="회전">↻</div>';
+function normalizeLayout(entry,photoCount){
+  entry.layout=entry.layout.map(pg=>pg
+    .filter(it=>!/^p\d+$/.test(it.k) || +it.k.slice(1)<photoCount)
+    .map(it=>it.id?it:Object.assign({id:uid()},it)))
+    .filter(pg=>pg.length);
+  if(!entry.layout.length) entry.layout=[[]];
+}
 function itemHTML(it,entry,photos){
   const st=`left:${it.x}%;top:${it.y}%;width:${it.w}%;transform:rotate(${it.rot||0}deg);${it.z?'z-index:'+it.z+';':''}`;
+  const idattr=`data-k="${it.k}" data-id="${it.id||''}"`;
   if(it.k==='title'){
     const n=dayIndex(entry.date), d=dayLabel(entry.date);
-    return `<div class="pitem title" data-k="${it.k}" style="${st}">${n?esc(ordinal(n))+', ':''}${esc(entry.title||'무제')}
+    return `<div class="pitem title" ${idattr} style="${st}">${n?esc(ordinal(n))+', ':''}${esc(entry.title||'무제')}
       <span class="dsub">${esc(entry.date)} · ${esc(d.wd)}${entry.weather?' · '+entry.weather:''}${entry.mood?' · '+entry.mood:''}</span>${HANDLES}</div>`;
   }
   if(it.k==='course'){
-    return `<div class="pitem course" data-k="${it.k}" style="${st}"><b>오늘의 코스</b>${(entry.course||[]).map(esc).join(' → ')}${HANDLES}</div>`;
+    return `<div class="pitem course" ${idattr} style="${st}"><b>오늘의 코스</b>${(entry.course||[]).map(esc).join(' → ')}${HANDLES}</div>`;
   }
   if(/^t\d+$/.test(it.k)){
     const parts=(entry.body||'').split(/\n{2,}/).map(s=>s.trim()).filter(Boolean);
     const txt=parts[+it.k.slice(1)]||'';
-    return `<div class="pitem text" data-k="${it.k}" style="${st}">${esc(txt)}${HANDLES}</div>`;
+    return `<div class="pitem text" ${idattr} style="${st}">${esc(txt)}${HANDLES}</div>`;
   }
   const i=+it.k.slice(1), p=photos[i];
   if(!p) return '';
-  return `<div class="pitem photo" data-k="${it.k}" style="${st}">
+  return `<div class="pitem photo" ${idattr} style="${st}">
     <figure><img src="${p.s}" alt="${esc(p.c||'')}" draggable="false">${p.c?`<figcaption>${esc(p.c)}</figcaption>`:''}</figure>${HANDLES}</div>`;
 }
 function coverPageHTML(t){
@@ -490,7 +515,7 @@ async function renderPages(){
       <span class="grow"></span>
       <button class="btn ghost sm" data-act="print">인쇄 · PDF</button>
     </div>
-    <p class="pagehint">${state.edit?'사진이나 글을 끌면 자리가 옮겨집니다. 한 번 누르면 모서리에 손잡이 두 개가 생기는데, 오른쪽 아래 ⤡ 를 끌면 크기가, 오른쪽 위 ↻ 를 끌면 기울기가 자유롭게 바뀝니다.':'페이지에서 만드셨던 것처럼 사진과 글이 지면에 배치됩니다. 마음에 안 들면 배치를 직접 바꿀 수 있어요.'}</p>
+    <p class="pagehint">${state.edit?'끌면 자리가 옮겨지고, 한 번 누르면 모서리 손잡이로 크기(⤡)와 기울기(↻)를 바꿉니다. 아래 막대의 ↑앞 지면 · ↓뒤 지면으로 다른 지면에 옮길 수 있고, 복사한 뒤 옮기면 같은 사진을 두 지면에 둘 수 있습니다.':'페이지에서 만드셨던 것처럼 사진과 글이 지면에 배치됩니다. 마음에 안 들면 배치를 직접 바꿀 수 있어요.'}</p>
     <div class="pagewrap${state.edit?' editing':''}" id="pagewrap">`;
   pageSeq=[];
   html+=coverPageHTML(t); pageSeq.push({type:'cover'});
@@ -498,7 +523,8 @@ async function renderPages(){
   for(const e of state.entries){
     const photos=e.photoCount?await photosOf(e.id):[];
     const ratios=await Promise.all(photos.map(p=>measure(p.s)));
-    if(!layoutValid(e.layout,e,photos.length)){ e.layout=autoLayout(e,photos,ratios); }
+    if(!layoutValid(e.layout)) e.layout=autoLayout(e,photos,ratios);
+    normalizeLayout(e,photos.length);
     e.layout.forEach((items,pi)=>{
       html+=`<div class="page" data-entry="${e.id}" data-page="${pi}"><div class="inner">${items.map(it=>itemHTML(it,e,photos)).join('')}</div><div class="pnum">${e.date}</div></div>`;
       pageSeq.push({type:'day',entryId:e.id,pageIdx:pi});
@@ -520,7 +546,7 @@ let drag=null;
 function selectItem(item,page){
   $$('.pitem.sel').forEach(x=>x.classList.remove('sel'));
   item.classList.add('sel');
-  state.sel={entryId:page.dataset.entry,pageIdx:+page.dataset.page,k:item.dataset.k};
+  state.sel={entryId:page.dataset.entry,pageIdx:+page.dataset.page,id:item.dataset.id};
   showBar();
 }
 document.addEventListener('pointerdown',ev=>{
@@ -562,7 +588,7 @@ document.addEventListener('pointermove',ev=>{
 });
 document.addEventListener('pointerup',async ()=>{
   if(!drag) return;
-  const it=findItem(drag.page.dataset.entry,+drag.page.dataset.page,drag.item.dataset.k);
+  const it=findItem(drag.page.dataset.entry,+drag.page.dataset.page,drag.item.dataset.id);
   if(it){
     it.x=+drag.cur.x.toFixed(2); it.y=+drag.cur.y.toFixed(2);
     it.w=+drag.cur.w.toFixed(2); it.rot=+drag.cur.rot.toFixed(1);
@@ -570,17 +596,21 @@ document.addEventListener('pointerup',async ()=>{
   }
   drag=null;
 });
-function findItem(entryId,pageIdx,k){
+function findItem(entryId,pageIdx,id){
   const e=state.entries.find(x=>x.id===entryId);
-  return e&&e.layout&&e.layout[pageIdx]?e.layout[pageIdx].find(i=>i.k===k):null;
+  return e&&e.layout&&e.layout[pageIdx]?e.layout[pageIdx].find(i=>i.id===id):null;
 }
 async function saveLayout(){ await S.set(K.entries(state.tripId),state.entries); }
 function showBar(){
   $('#bar-root').innerHTML=`<div class="itembar">
+    <button data-act="it" data-op="pgup">↑ 앞 지면</button>
+    <button data-act="it" data-op="pgdn">↓ 뒤 지면</button>
+    <button data-act="it" data-op="copy">복사</button>
     <button data-act="it" data-op="w-">− 작게</button>
     <button data-act="it" data-op="w+">+ 크게</button>
     <button data-act="it" data-op="r0">기울기 0</button>
     <button data-act="it" data-op="front">맨 앞</button>
+    <button data-act="it" data-op="del">지면에서 빼기</button>
     <button data-act="it" data-op="done">선택 해제</button>
   </div>`;
 }
@@ -588,13 +618,52 @@ function hideBar(){ $('#bar-root').innerHTML=''; }
 async function itemOp(op){
   if(!state.sel) return;
   if(op==='done'){ state.sel=null; hideBar(); $$('.pitem.sel').forEach(x=>x.classList.remove('sel')); return; }
-  const it=findItem(state.sel.entryId,state.sel.pageIdx,state.sel.k); if(!it) return;
+  const e=state.entries.find(x=>x.id===state.sel.entryId); if(!e||!e.layout) return;
+  const pg=e.layout[state.sel.pageIdx]; if(!pg) return;
+  const idx=pg.findIndex(i=>i.id===state.sel.id); if(idx<0) return;
+  const it=pg[idx];
+
+  // 지면 사이 이동 / 복사 / 빼기 — 다시 그린다
+  if(op==='pgup'||op==='pgdn'||op==='copy'||op==='del'){
+    if(op==='del'){
+      pg.splice(idx,1);
+      if(!e.layout.length||e.layout.every(p=>!p.length)) e.layout=[[]];
+      state.sel=null; hideBar();
+      toast('지면에서 뺐습니다. 사진 자체는 남아 있습니다.');
+    }else if(op==='copy'){
+      const copy=Object.assign({},it,{id:uid(),x:Math.min(88,it.x+4),y:Math.min(88,it.y+4)});
+      pg.push(copy); state.sel={...state.sel,id:copy.id};
+      toast('같은 지면에 복사했습니다. 앞/뒤 지면 버튼으로 옮길 수 있어요.');
+    }else{
+      const dir=op==='pgup'?-1:1;
+      let target=state.sel.pageIdx+dir;
+      if(target<0){ toast('이 날짜의 첫 지면입니다.'); return; }
+      if(target>=e.layout.length){
+        if(op==='pgdn'){ e.layout.push([]); }
+        else return;
+      }
+      pg.splice(idx,1);
+      e.layout[target].push(it);
+      e.layout=e.layout.filter((p,i)=>p.length||i<=target);
+      state.sel={entryId:e.id,pageIdx:target,id:it.id};
+      toast(dir<0?'앞 지면으로 옮겼습니다.':'뒤 지면으로 옮겼습니다.');
+    }
+    await saveLayout();
+    await renderPages();
+    if(state.sel){
+      const el=[...$$('#pagewrap .page')].find(p=>p.dataset.entry===state.sel.entryId&&+p.dataset.page===state.sel.pageIdx)
+        ?.querySelector(`.pitem[data-id="${state.sel.id}"]`);
+      if(el){ el.classList.add('sel'); showBar(); el.scrollIntoView({block:'center',behavior:'smooth'}); }
+    }
+    return;
+  }
+
   if(op==='w+') it.w=Math.min(92,+(it.w+4).toFixed(1));
   if(op==='w-') it.w=Math.max(12,+(it.w-4).toFixed(1));
   if(op==='r0') it.rot=0;
-  if(op==='front') it.z=(Math.max(0,...(state.entries.find(e=>e.id===state.sel.entryId).layout[state.sel.pageIdx].map(i=>i.z||0)))+1);
+  if(op==='front') it.z=Math.max(0,...pg.map(i=>i.z||0))+1;
   const el=[...$$('#pagewrap .page')].find(p=>p.dataset.entry===state.sel.entryId&&+p.dataset.page===state.sel.pageIdx)
-            ?.querySelector(`.pitem[data-k="${state.sel.k}"]`);
+            ?.querySelector(`.pitem[data-id="${state.sel.id}"]`);
   if(el){ el.style.width=it.w+'%'; el.style.transform=`rotate(${it.rot||0}deg)`; if(it.z) el.style.zIndex=it.z; }
   await saveLayout();
 }
