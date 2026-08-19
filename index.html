@@ -1,0 +1,933 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>여행일지</title>
+<style>
+:root{
+  --sky:#C9E2F2; --sky-deep:#A9CFE6; --paper:#EDF5FA; --card:#fff;
+  --navy:#1B4E96; --navy-deep:#123566; --ink:#1C2A38; --ink-soft:#41535F; --muted:#6F8496;
+  --rule:#3C4E5C; --line:#C4D8E5; --line-soft:#DCE9F2;
+  --stay:#2F6FB5; --food:#D2691E; --sight:#2E8B6E; --cafe:#7A5AA8; --etc:#6B7280;
+  --font:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR","Malgun Gothic",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --r:14px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--font);line-height:1.6;-webkit-font-smoothing:antialiased}
+button,input,textarea,select{font-family:inherit;font-size:16px;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.app{max-width:900px;margin:0 auto;padding:0 18px 120px}
+
+.topbar{position:sticky;top:0;z-index:40;background:rgba(237,245,250,.94);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);margin:0 -18px 22px;padding:13px 18px;display:flex;align-items:center;gap:12px}
+.brand h1{font-size:19px;font-weight:800;letter-spacing:-.05em;margin:0;color:var(--navy-deep)}
+.brand .tag{font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:.08em}
+.topbar .spacer{flex:1}
+
+.btn{border:1px solid var(--navy);background:var(--navy);color:#fff;border-radius:999px;padding:9px 16px;font-size:14px;font-weight:700;letter-spacing:-.02em;transition:transform .12s}
+.btn:active{transform:translateY(1px)}
+.btn.ghost{background:#fff;color:var(--navy);border-color:var(--line)}
+.btn.ghost[aria-pressed="true"]{background:var(--navy);color:#fff;border-color:var(--navy)}
+.btn.sm{padding:6px 12px;font-size:13px}
+.btn.danger{background:#fff;border-color:#E0BDBD;color:#B4483A}
+.icon-btn{border:1px solid var(--line);background:#fff;border-radius:9px;width:32px;height:32px;display:grid;place-items:center;font-size:14px;color:var(--ink-soft)}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:10px;margin:0 0 14px}
+.eyebrow::after{content:"";flex:1;height:1px;background:var(--line)}
+
+/* 목록 */
+.trip-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(238px,1fr));gap:14px}
+.trip-card{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--card);text-align:left;padding:0;width:100%;transition:transform .14s,box-shadow .14s}
+.trip-card:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(18,53,102,.12)}
+.mini-cover{height:108px;background:var(--sky);position:relative;overflow:hidden}
+.mini-cover img{position:absolute;width:60%;height:74px;object-fit:cover;background:#fff;padding:4px;border-radius:2px;box-shadow:0 4px 10px rgba(18,53,102,.22)}
+.mini-cover img:nth-child(1){left:5%;top:10px;transform:rotate(-4deg)}
+.mini-cover img:nth-child(2){right:4%;top:24px;transform:rotate(4deg);width:52%}
+.mini-cover .noimg{position:absolute;inset:0;display:grid;place-items:center;color:var(--navy-deep);opacity:.4;font-size:12.5px}
+.trip-body{padding:12px 14px 14px}
+.trip-body h3{margin:0 0 3px;font-size:17px;font-weight:800;letter-spacing:-.04em;color:var(--navy-deep)}
+.trip-meta{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.trip-stats{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.pillstat{font-size:11.5px;border:1px solid var(--line-soft);border-radius:999px;padding:2px 9px;color:var(--ink-soft);background:var(--paper)}
+.empty{border:1px dashed var(--line);border-radius:var(--r);padding:36px 22px;text-align:center;background:var(--card)}
+.empty strong{display:block;font-size:17px;font-weight:800;letter-spacing:-.03em;margin-bottom:6px;color:var(--navy-deep)}
+.empty p{margin:0 0 16px;color:var(--muted);font-size:14.5px}
+
+.backlink{background:none;border:0;padding:0;font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;color:var(--muted);margin-bottom:12px}
+.head-actions{display:flex;gap:8px;margin:16px 0 0;flex-wrap:wrap}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:20px 0 22px;position:sticky;top:61px;background:var(--paper);z-index:20;overflow-x:auto}
+.tab{background:none;border:0;padding:11px 13px;font-size:14.5px;font-weight:700;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;letter-spacing:-.03em;white-space:nowrap}
+.tab[aria-selected="true"]{color:var(--navy);border-bottom-color:var(--navy)}
+
+/* ============ 지면(페이지) ============ */
+.pagebar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.pagebar .grow{flex:1}
+.pagehint{font-size:12.5px;color:var(--muted);margin:0 0 14px}
+.pagewrap{display:grid;gap:22px}
+.page{position:relative;width:100%;padding-top:141.4%;background:var(--sky);border-radius:5px;
+  box-shadow:0 6px 22px rgba(18,53,102,.16);overflow:hidden;user-select:none}
+.page .inner{position:absolute;inset:0}
+.pnum{position:absolute;bottom:1.4%;right:3%;font-family:var(--mono);font-size:.5em;color:var(--navy-deep);opacity:.5}
+.pitem{position:absolute;transform-origin:center center}
+.pitem.photo figure{margin:0;background:#fff;padding:.28em .28em .28em;border-radius:2px;box-shadow:0 .18em .5em rgba(18,53,102,.25)}
+.pitem.photo img{width:100%;display:block;border-radius:1px}
+.pitem.photo figcaption{font-size:.56em;line-height:1.5;color:#26384A;padding:.5em .2em 0;white-space:pre-wrap}
+.pitem.text{font-size:.66em;line-height:1.62;color:#22323F;white-space:pre-wrap}
+.pitem.title{font-size:1.35em;font-weight:900;letter-spacing:-.05em;color:var(--navy);line-height:1.15}
+.pitem.title .dsub{display:block;font-size:.42em;font-weight:700;letter-spacing:0;color:var(--navy-deep);opacity:.72;margin-top:.5em}
+.pitem.course{font-size:.6em;font-weight:700;color:var(--navy-deep);background:rgba(255,255,255,.72);border-radius:.5em;padding:.6em .8em;line-height:1.7}
+.pitem.course b{display:block;font-size:.85em;opacity:.65;margin-bottom:.25em;letter-spacing:.04em}
+.editing .pitem{cursor:grab;touch-action:none}
+.editing .pitem::after{content:"";position:absolute;inset:-4px;border:1px dashed rgba(27,78,150,.35);border-radius:4px;pointer-events:none}
+.editing .pitem.sel::after{border:2px solid var(--navy);background:rgba(27,78,150,.06)}
+.phandle{display:none;position:absolute;width:30px;height:30px;border-radius:50%;background:var(--navy);
+  border:2px solid #fff;box-shadow:0 2px 8px rgba(18,53,102,.4);z-index:99;touch-action:none;
+  align-items:center;justify-content:center;color:#fff;font-size:13px;line-height:1}
+.editing .pitem.sel .phandle{display:flex}
+.phandle.h-size{right:-15px;bottom:-15px;cursor:nwse-resize}
+.phandle.h-rot{right:-15px;top:-15px;cursor:grab}
+.itembar{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:60;background:var(--navy-deep);
+  border-radius:999px;padding:6px;display:flex;gap:4px;box-shadow:0 8px 22px rgba(18,53,102,.35)}
+.itembar button{border:0;background:rgba(255,255,255,.14);color:#fff;border-radius:999px;padding:7px 12px;font-size:13px;font-weight:700}
+.itembar button:hover{background:rgba(255,255,255,.28)}
+
+/* 표지 지면 */
+.coverpage{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:6%}
+.coverpage .collage{position:relative;width:100%;height:38%;margin-bottom:2%}
+.coverpage figure{position:absolute;margin:0;background:#fff;padding:.3em;border-radius:2px;box-shadow:0 .2em .5em rgba(18,53,102,.25)}
+.coverpage figure img{width:100%;height:100%;object-fit:cover;display:block}
+.coverpage .c1{width:52%;height:56%;left:2%;top:2%;transform:rotate(-4.5deg)}
+.coverpage .c2{width:47%;height:52%;right:1%;top:22%;transform:rotate(3.5deg)}
+.coverpage .c3{width:46%;height:50%;left:7%;bottom:0;transform:rotate(-2deg)}
+.coverpage .rule{height:.11em;background:var(--rule);width:78%;margin:.9em auto}
+.coverpage .date{font-size:.7em;font-weight:700;color:var(--navy-deep)}
+.coverpage h2{margin:.25em 0 .1em;font-size:2.3em;font-weight:900;letter-spacing:-.055em;color:var(--navy);text-shadow:.04em .06em 0 rgba(255,255,255,.75)}
+.coverpage .region{margin:0;font-size:1.15em;font-weight:800;color:var(--navy);letter-spacing:-.04em}
+.coverpage .party{margin:.8em 0 0;font-size:1em;font-weight:800;color:var(--navy-deep);letter-spacing:-.03em;white-space:pre-line;line-height:1.4}
+
+/* ============ 여정(목록) ============ */
+.note-block{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--navy);border-radius:0 var(--r) var(--r) 0;padding:15px 17px;margin-bottom:20px}
+.note-block h5{margin:0 0 7px;font-size:13px;font-weight:800;color:var(--navy)}
+.note-block p{margin:0;white-space:pre-wrap;font-size:14.5px;color:var(--ink-soft)}
+.timeline{position:relative;padding-left:70px}
+.timeline::before{content:"";position:absolute;left:53px;top:8px;bottom:8px;width:1px;background:var(--line)}
+.day{position:relative;margin-bottom:22px}
+.daystamp{position:absolute;left:-70px;top:2px;width:62px;text-align:right;font-family:var(--mono);font-size:10.5px;color:var(--muted);line-height:1.35}
+.daystamp b{display:block;font-size:14px;color:var(--navy-deep);font-weight:800}
+.daystamp .dn{display:block;font-size:19px;color:var(--ink);font-weight:700}
+.day::before{content:"";position:absolute;left:-18px;top:10px;width:9px;height:9px;border-radius:50%;background:var(--paper);border:2px solid var(--navy)}
+.entry{border:1px solid var(--line);background:var(--card);border-radius:var(--r);padding:14px 15px}
+.entry h4{margin:0 0 6px;font-size:16.5px;font-weight:800;letter-spacing:-.04em;color:var(--navy-deep)}
+.entry p.body{margin:0;white-space:pre-wrap;font-size:14.5px;color:var(--ink-soft)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.chip{font-size:12px;background:var(--paper);border:1px solid var(--line-soft);border-radius:999px;padding:2px 9px;color:var(--ink-soft)}
+.entry-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.entry-actions{display:flex;gap:4px;flex-shrink:0}
+.course{background:var(--sky);border-radius:10px;padding:10px 12px;margin:0 0 11px}
+.course .clabel{font-size:11px;font-weight:800;color:var(--navy-deep);margin-bottom:5px}
+.course .flow{display:flex;flex-wrap:wrap;align-items:center;gap:5px}
+.course .step{background:#fff;border-radius:7px;padding:3px 9px;font-size:13px;font-weight:700;color:var(--navy-deep)}
+.course .arw{color:var(--navy);font-weight:800;font-size:13px}
+.shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:9px;margin-top:12px}
+.shot{background:var(--paper);border:1px solid var(--line-soft);border-radius:10px;overflow:hidden;padding:0;text-align:left;width:100%}
+.shot img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:#fff}
+.shot figcaption{padding:6px 8px 8px;font-size:12px;line-height:1.45;color:var(--ink-soft);white-space:pre-wrap}
+.shot.more{display:grid;place-items:center;min-height:110px;border-style:dashed;color:var(--muted);font-size:12.5px;text-align:center}
+
+/* 장소 */
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.filter{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 12px;font-size:13px;color:var(--ink-soft)}
+.filter[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:#fff;font-weight:700}
+.place-list{display:grid;gap:10px}
+.place{display:flex;gap:12px;border:1px solid var(--line);background:var(--card);border-radius:var(--r);padding:13px 14px;align-items:flex-start}
+.dot{width:10px;height:10px;border-radius:50%;margin-top:8px;flex-shrink:0}
+.place-main{flex:1;min-width:0}
+.place h4{margin:0;font-size:16px;font-weight:800;letter-spacing:-.04em;display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--navy-deep)}
+.cat-label{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.place .note{margin:5px 0 0;font-size:14px;color:var(--ink-soft);white-space:pre-wrap}
+.place .geo{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:6px}
+.stars{letter-spacing:2px;font-size:13px;color:#D9A21B}
+
+/* 지도 */
+#map{height:420px;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--card);z-index:1}
+.map-note{font-size:12.5px;color:var(--muted);margin:10px 2px 0}
+.map-bar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.pin{width:20px;height:20px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+.fallmap{width:100%;height:420px;border:1px solid var(--line);border-radius:var(--r);background:var(--card)}
+.fallmap text{font-family:var(--mono);font-size:9px;fill:var(--muted)}
+
+/* 모달 */
+.overlay{position:fixed;inset:0;background:rgba(18,53,102,.5);z-index:100;display:flex;align-items:flex-end;justify-content:center}
+@media(min-width:640px){.overlay{align-items:center;padding:24px}}
+.sheet{background:var(--paper);width:100%;max-width:580px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:20px 18px 26px;border:1px solid var(--line)}
+@media(min-width:640px){.sheet{border-radius:18px}}
+.sheet h3{margin:0 0 16px;font-size:20px;font-weight:800;letter-spacing:-.04em;color:var(--navy-deep)}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12.5px;font-weight:700;color:var(--ink-soft);margin-bottom:6px}
+.field input[type=text],.field input[type=date],.field input[type=number],.field textarea,.field select{width:100%;border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px 12px}
+.field textarea{min-height:110px;resize:vertical;line-height:1.6}
+.field .hint{font-size:12px;color:var(--muted);margin-top:5px}
+.row{display:flex;gap:10px}.row>*{flex:1}
+.opts{display:flex;gap:6px;flex-wrap:wrap}
+.opt{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;font-size:13.5px}
+.opt[aria-pressed="true"]{border-color:var(--navy);background:var(--navy);color:#fff;font-weight:700}
+.sheet-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap}
+.filedrop{display:block;border:1px dashed var(--line);border-radius:10px;padding:14px;text-align:center;background:#fff;font-size:13.5px;color:var(--muted)}
+.pvlist{display:grid;gap:8px;margin-top:10px}
+.pvrow{display:flex;gap:9px;align-items:center;background:#fff;border:1px solid var(--line-soft);border-radius:10px;padding:7px}
+.pvrow img{width:62px;height:62px;object-fit:cover;border-radius:7px;flex-shrink:0}
+.pvrow input{flex:1;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:14px;min-width:0}
+.pvrow button{border:1px solid var(--line);background:#fff;border-radius:8px;width:30px;height:30px;flex-shrink:0}
+
+.lb{position:fixed;inset:0;background:rgba(10,20,32,.95);z-index:200;display:grid;place-items:center;padding:16px}
+.lb img{max-width:100%;max-height:74vh;border-radius:6px}
+.lb .cap{max-width:640px;text-align:center;color:#DCE9F2;font-size:14px;margin-top:14px;white-space:pre-wrap}
+.lb .lbbar{position:absolute;top:14px;right:14px}
+.lb .nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.15);border:0;color:#fff;width:44px;height:64px;border-radius:10px;font-size:20px}
+.lb .prev{left:12px}.lb .next{right:12px}
+.lb .count{position:absolute;bottom:18px;font-family:var(--mono);font-size:12px;color:#9FB6C8}
+
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:300;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.toast{background:var(--navy-deep);color:#fff;padding:9px 16px;border-radius:999px;font-size:13.5px;box-shadow:0 6px 18px rgba(18,53,102,.3)}
+.fab{position:fixed;right:max(18px,calc(50% - 450px + 18px));bottom:22px;z-index:50;box-shadow:0 8px 20px rgba(18,53,102,.25)}
+.footnote{margin-top:34px;font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+
+@media print{
+  @page{size:A4;margin:0}
+  body{background:#fff}
+  .topbar,.tabs,.head-actions,.backlink,.fab,.footnote,#toast,.pagebar,.pagehint,.itembar{display:none!important}
+  .app{padding:0;max-width:none}
+  .pagewrap{gap:0}
+  .page{box-shadow:none;border-radius:0;break-after:page;page-break-after:always}
+  .editing .pitem::after{display:none}
+}
+</style>
+
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><h1>여행일지</h1><div class="tag">TRAVEL JOURNAL</div></div>
+    <div class="spacer"></div>
+    <button class="btn ghost sm" data-act="menu">데이터</button>
+  </header>
+  <main id="view"></main>
+  <div class="footnote" id="footnote"></div>
+</div>
+<div id="modal-root"></div><div id="lb-root"></div><div id="toast"></div><div id="bar-root"></div>
+
+<script>
+/* ============ 저장소 ============ */
+/* Claude 안에서는 Claude 저장소를, 웹·기기에서는 이 기기의 저장소(IndexedDB)를 쓴다 */
+if(!window.storage && window.indexedDB){
+  const DB='travel-journal', ST='kv';
+  const openDB=()=>new Promise((res,rej)=>{
+    const r=indexedDB.open(DB,1);
+    r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains(ST)) r.result.createObjectStore(ST); };
+    r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+  });
+  const run=(mode,fn)=>openDB().then(db=>new Promise((res,rej)=>{
+    const t=db.transaction(ST,mode), req=fn(t.objectStore(ST));
+    t.oncomplete=()=>res(req?req.result:undefined);
+    t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error);
+  }));
+  window.storage={
+    async get(k){ const v=await run('readonly',s=>s.get(k)); if(v===undefined) throw new Error('none'); return {key:k,value:v}; },
+    async set(k,v){ await run('readwrite',s=>s.put(v,k)); return {key:k,value:v}; },
+    async delete(k){ await run('readwrite',s=>s.delete(k)); return {key:k,deleted:true}; },
+    async list(p=''){ const ks=await run('readonly',s=>s.getAllKeys()); return {keys:(ks||[]).map(String).filter(k=>k.startsWith(p))}; }
+  };
+  window.__deviceStore=true;
+}
+if(!window.storage){
+  const mem={};
+  window.storage={async get(k){if(!(k in mem))throw 0;return{key:k,value:mem[k]}},
+    async set(k,v){mem[k]=v;return{key:k,value:v}},async delete(k){delete mem[k];return{key:k,deleted:1}},
+    async list(p=''){return{keys:Object.keys(mem).filter(k=>k.startsWith(p))}}};
+  window.__memoryOnly=true;
+}
+const S={
+  async get(k,d=null){try{const r=await window.storage.get(k);return r&&r.value?JSON.parse(r.value):d}catch(e){return d}},
+  async set(k,v){try{const r=await window.storage.set(k,JSON.stringify(v));if(!r)throw 0;return true}catch(e){toast('저장하지 못했습니다.');return false}},
+  async del(k){try{await window.storage.delete(k)}catch(e){}}
+};
+const K={trips:'tj:trips',entries:i=>'tj:entries:'+i,places:i=>'tj:places:'+i,photos:i=>'tj:photos:'+i};
+
+/* ============ 상수 ============ */
+const MOODS=[['최고','😊'],['좋음','🙂'],['그냥','😐'],['아쉬움','😕'],['지침','😮‍💨']];
+const WEATHERS=[['맑음','☀️'],['구름','⛅'],['비','🌧️'],['눈','❄️'],['더움','🔥'],['천둥번개','⛈️']];
+const CATS={sight:{label:'명소',hex:'#2E8B6E'},food:{label:'맛집',hex:'#D2691E'},stay:{label:'숙소',hex:'#2F6FB5'},cafe:{label:'카페',hex:'#7A5AA8'},etc:{label:'기타',hex:'#6B7280'}};
+const CITIES=[['서울',37.5665,126.9780],['양평',37.4917,127.4874],['영종도',37.4894,126.4900],['가평',37.8315,127.5095],
+['부산',35.1796,129.0756],['제주',33.4996,126.5312],['서귀포',33.2541,126.5601],['경주',35.8562,129.2247],
+['강릉',37.7519,128.8761],['속초',38.2070,128.5918],['양양',38.0754,128.6190],['전주',35.8242,127.1480],
+['여수',34.7604,127.6622],['통영',34.8544,128.4331],['거제',34.8806,128.6211],['남해',34.8376,127.8925],
+['안동',36.5684,128.7294],['단양',36.9846,128.3655],['춘천',37.8813,127.7300],['파주',37.7598,126.7800],
+['인천',37.4563,126.7052],['김포',37.6152,126.7156],['대구',35.8714,128.6014],['대전',36.3504,127.3845],
+['광주',35.1595,126.8526],['울산',35.5384,129.3114],['수원',37.2636,127.0286],['포항',36.0190,129.3435],
+['목포',34.8118,126.3922],['진주',35.1800,128.1076],['부여',36.2757,126.9098],['태안',36.7456,126.2980],
+['도쿄',35.6762,139.6503],['오사카',34.6937,135.5023],['교토',35.0116,135.7681],['후쿠오카',33.5904,130.4017],
+['삿포로',43.0618,141.3545],['오키나와',26.2124,127.6809],['타이베이',25.0330,121.5654],['홍콩',22.3193,114.1694],
+['방콕',13.7563,100.5018],['싱가포르',1.3521,103.8198],['다낭',16.0544,108.2022],['발리',-8.4095,115.1889],
+['시드니',-33.8688,151.2093],['호놀룰루',21.3069,-157.8583],['로스앤젤레스',34.0522,-118.2437],['뉴욕',40.7128,-74.0060],
+['런던',51.5074,-0.1278],['파리',48.8566,2.3522],['로마',41.9028,12.4964],['바르셀로나',41.3874,2.1686],
+['프라하',50.0755,14.4378],['취리히',47.3769,8.5417],['이스탄불',41.0082,28.9784],['두바이',25.2048,55.2708]];
+
+/* ============ 유틸 ============ */
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const view=$('#view');
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const today=()=>new Date().toISOString().slice(0,10);
+const normPhoto=p=>typeof p==='string'?{s:p,c:''}:{s:p.s,c:p.c||''};
+function toast(m){const t=document.createElement('div');t.className='toast';t.textContent=m;$('#toast').appendChild(t);setTimeout(()=>t.remove(),2600);}
+function fmtRange(a,b){if(!a)return'날짜 미정';const y=a.slice(0,4),m=+a.slice(5,7),d=+a.slice(8,10);
+  if(!b||b===a)return`${y}.${m}.${d}일`;const m2=+b.slice(5,7),d2=+b.slice(8,10);
+  return m===m2?`${y}.${m}.${d}~${d2}일`:`${y}.${m}.${d}~${m2}.${d2}일`;}
+function days(a,b){if(!a||!b)return null;const d=(new Date(b)-new Date(a))/864e5;return isNaN(d)||d<0?null:Math.round(d)+1;}
+function dayIndex(date){const t=trip();if(!t||!t.start)return null;const d=(new Date(date)-new Date(t.start))/864e5;return isNaN(d)||d<0?null:Math.round(d)+1;}
+const ORD=['','첫날','둘째날','셋째날','넷째날','다섯째날','여섯째날','일곱째날','여덟째날','아홉째날','열째날'];
+const ordinal=n=>n&&ORD[n]?ORD[n]:(n?n+'일차':'');
+function dayLabel(s){const d=new Date(s+'T00:00:00');if(isNaN(d))return{dn:'--',wd:''};
+  return{dn:String(d.getDate()).padStart(2,'0'),wd:(d.getMonth()+1)+'월 '+['일','월','화','수','목','금','토'][d.getDay()]+'요일'};}
+const parseCourse=s=>String(s||'').split(/→|->|⇒|>>/).map(x=>x.trim()).filter(Boolean);
+function hash(str){let h=0;for(let i=0;i<str.length;i++)h=(h*31+str.charCodeAt(i))|0;return Math.abs(h);}
+
+/* ============ 상태 ============ */
+const state={tripId:null,tab:'pages',trips:[],entries:[],places:[],filter:'all',pickMode:false,edit:false,sel:null,photoCache:{}};
+const trip=()=>state.trips.find(t=>t.id===state.tripId);
+async function loadTrips(){state.trips=await S.get(K.trips,[]);}
+async function loadTrip(id){
+  state.tripId=id;state.photoCache={};
+  state.entries=await S.get(K.entries(id),[]);
+  state.places=await S.get(K.places(id),[]);
+  state.entries.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+}
+async function photosOf(entryId){
+  if(!state.photoCache[entryId]) state.photoCache[entryId]=(await S.get(K.photos(entryId),[])).map(normPhoto);
+  return state.photoCache[entryId];
+}
+
+/* ============ 홈 ============ */
+function renderHome(){
+  state.tripId=null;state.edit=false;hideBar();
+  const list=[...state.trips].sort((a,b)=>(b.start||'').localeCompare(a.start||''));
+  view.innerHTML=`<p class="eyebrow">기록한 여행 ${list.length}</p>
+    ${list.length?`<div class="trip-grid">${list.map(t=>{
+      const th=(t.covers||[]).slice(0,2);
+      return `<button class="trip-card" data-act="open" data-id="${t.id}">
+        <div class="mini-cover">${th.length?th.map(s=>`<img src="${s}" alt="">`).join(''):'<div class="noimg">사진을 넣으면 표지가 채워집니다</div>'}</div>
+        <div class="trip-body"><h3>${esc(t.title)}</h3>
+        <div class="trip-meta">${fmtRange(t.start,t.end)}${t.region?' · '+esc(t.region):''}</div>
+        <div class="trip-stats"><span class="pillstat">기록 ${t.entryCount||0}</span><span class="pillstat">장소 ${t.placeCount||0}</span>${days(t.start,t.end)?`<span class="pillstat">${days(t.start,t.end)}일</span>`:''}</div>
+      </div></button>`;}).join('')}</div>`
+    :`<div class="empty"><strong>첫 여행일지를 시작해 보세요</strong><p>표지에 제목과 함께한 사람을 적고, 하루마다 사진과 이야기를 남기면 지면으로 배치됩니다.</p><button class="btn" data-act="new-trip">여행 추가</button></div>`}
+    <button class="btn fab" data-act="new-trip">+ 여행 추가</button>`;
+  $('#footnote').textContent = window.__memoryOnly ? '이 창을 새로 고치면 기록이 사라집니다.'
+    : window.__deviceStore ? '기록은 이 기기에 저장됩니다. 기기를 바꾸거나 브라우저 기록을 지우기 전에 데이터 메뉴에서 백업해 두세요.'
+    : '기록은 자동 저장됩니다. 데이터 메뉴에서 백업할 수 있습니다.';
+}
+
+/* ============ 여행 화면 ============ */
+function renderTrip(){
+  const t=trip(); if(!t){renderHome();return;}
+  view.innerHTML=`<button class="backlink" data-act="home">← 여행 목록</button>
+    <div class="head-actions">
+      <button class="btn sm" data-act="new-entry">하루 기록 추가</button>
+      <button class="btn ghost sm" data-act="new-place">장소 추가</button>
+      <button class="btn ghost sm" data-act="edit-trip">표지·서문 수정</button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-act="tab" data-tab="pages" aria-selected="${state.tab==='pages'}">지면</button>
+      <button class="tab" role="tab" data-act="tab" data-tab="timeline" aria-selected="${state.tab==='timeline'}">여정</button>
+      <button class="tab" role="tab" data-act="tab" data-tab="map" aria-selected="${state.tab==='map'}">지도</button>
+      <button class="tab" role="tab" data-act="tab" data-tab="places" aria-selected="${state.tab==='places'}">장소 ${state.places.length||''}</button>
+    </div><div id="tabpanel"></div>`;
+  renderTab();
+  $('#footnote').textContent='기록은 자동 저장됩니다.';
+}
+function renderTab(){
+  const p=$('#tabpanel'); if(!p) return;
+  hideBar(); state.sel=null;
+  if(state.tab==='pages') renderPages();
+  else if(state.tab==='timeline') p.innerHTML=timelineHTML();
+  else if(state.tab==='places') p.innerHTML=placesHTML();
+  else{ p.innerHTML=`<div class="map-bar">
+      <button class="btn ghost sm" data-act="pick" aria-pressed="${state.pickMode}">${state.pickMode?'선택 중 · 지도를 누르세요':'지도를 눌러 장소 추가'}</button>
+      <button class="btn ghost sm" data-act="new-place">직접 입력</button></div>
+    <div id="map"></div><p class="map-note" id="mapnote"></p>`; mountMap(); }
+}
+
+/* ============================================================
+   지면(페이지) — 자동 배치 + 자유 배치
+============================================================ */
+const PAGE_RATIO=1.414;            // 세로/가로
+const M={l:6,r:6,t:6,b:7};         // 여백 %
+function pctH(wPct,aspect){ return wPct*aspect/PAGE_RATIO; }   // 사진 높이(페이지 높이 %)
+function textH(len,wPct,em){       // 글 높이 추정(%)
+  const perLine=Math.max(6,wPct/em*0.95);
+  const lines=Math.max(1,Math.ceil(len/perLine));
+  return lines*(em*2.6);
+}
+function measure(src){
+  return new Promise(res=>{const i=new Image();i.onload=()=>res(i.naturalWidth/i.naturalHeight||1.4);i.onerror=()=>res(1.4);i.src=src;});
+}
+/* 자동 배치: 두 단으로 흘리되 사진마다 기울기를 준다 */
+function autoLayout(entry,photos,ratios){
+  const seed=hash(entry.id);
+  const blocks=[];
+  blocks.push({k:'title',h:9});
+  if((entry.course||[]).length) blocks.push({k:'course',h:6+Math.ceil(entry.course.length/2)*3});
+  (entry.body||'').split(/\n{2,}/).map(s=>s.trim()).filter(Boolean).forEach((t,i)=>blocks.push({k:'t'+i,len:t.length}));
+  photos.forEach((p,i)=>blocks.push({k:'p'+i,aspect:ratios[i]||1.4,cap:(p.c||'').length}));
+  // 사진과 글을 번갈아 섞어 지면이 고르게
+  const texts=blocks.filter(b=>/^t\d+$/.test(b.k)), pics=blocks.filter(b=>/^p\d+$/.test(b.k));
+  const head=blocks.filter(b=>b.k==='title'||b.k==='course');
+  const mixed=[]; let ti=0,pi=0;
+  while(ti<texts.length||pi<pics.length){
+    if(pi<pics.length) mixed.push(pics[pi++]);
+    if(pi<pics.length&&pics.length>texts.length*1.6) mixed.push(pics[pi++]);
+    if(ti<texts.length) mixed.push(texts[ti++]);
+  }
+  const pages=[]; let items=[], col=[M.t,M.t], first=true;
+  const colX=[M.l,50+1];
+  const colW=[100-M.l-M.r-52, 0];
+  function newPage(){ if(items.length) pages.push(items); items=[]; col=[M.t,M.t]; first=false; }
+  // 머리(제목·코스)는 첫 페이지 상단 전체 폭
+  head.forEach(b=>{
+    items.push({k:b.k,x:M.l,y:col[0],w:100-M.l-M.r,rot:0});
+    col[0]+=b.h+1.6; col[1]=col[0];
+  });
+  let idx=0;
+  for(const b of mixed){
+    const c = col[0]<=col[1]?0:1;
+    const wBase = /^p\d+$/.test(b.k) ? [46,52,44,50][ (seed+idx)%4 ] : [40,44,42,38][ (seed+idx*3)%4 ];
+    const w=Math.min(wBase, 52);
+    const x = (c===0? M.l : 100-M.r-w) + (((seed+idx*7)%5)-2)*0.6;
+    let h;
+    if(b.k[0]==='p'){ h=pctH(w,1/b.aspect)+(b.cap?textH(b.cap,w,.56)+1.4:0)+1.2; }
+    else{ h=textH(b.len,w,.66)+1.6; }
+    if(col[c]+h > 100-M.b){
+      if(col[0]>100-M.b-6 && col[1]>100-M.b-6){ newPage(); }
+      else { /* 다른 단으로 */ }
+    }
+    const cc = col[0]<=col[1]?0:1;
+    if(col[cc]+h > 100-M.b){ newPage(); }
+    const c2 = col[0]<=col[1]?0:1;
+    const x2 = Math.max(M.l-2, Math.min(100-M.r-w+2,
+      (c2===0? M.l : 100-M.r-w) + (((seed+idx*7)%5)-2)*0.5));
+    const rot = b.k[0]==='p' ? (((seed+idx*13)%9)-4)*0.9 : 0;
+    items.push({k:b.k,x:+x2.toFixed(2),y:+col[c2].toFixed(2),w:+w.toFixed(2),rot:+rot.toFixed(2)});
+    col[c2]+=h+2.2;
+    idx++;
+  }
+  if(items.length) pages.push(items);
+  return pages;
+}
+function layoutValid(layout,entry,photoCount){
+  if(!layout||!Array.isArray(layout)||!layout.length) return false;
+  const keys=new Set(); layout.forEach(pg=>pg.forEach(it=>keys.add(it.k)));
+  for(let i=0;i<photoCount;i++) if(!keys.has('p'+i)) return false;
+  return true;
+}
+const HANDLES='<div class="phandle h-size" data-h="size" title="크기">⤡</div><div class="phandle h-rot" data-h="rot" title="회전">↻</div>';
+function itemHTML(it,entry,photos){
+  const st=`left:${it.x}%;top:${it.y}%;width:${it.w}%;transform:rotate(${it.rot||0}deg);${it.z?'z-index:'+it.z+';':''}`;
+  if(it.k==='title'){
+    const n=dayIndex(entry.date), d=dayLabel(entry.date);
+    return `<div class="pitem title" data-k="${it.k}" style="${st}">${n?esc(ordinal(n))+', ':''}${esc(entry.title||'무제')}
+      <span class="dsub">${esc(entry.date)} · ${esc(d.wd)}${entry.weather?' · '+entry.weather:''}${entry.mood?' · '+entry.mood:''}</span>${HANDLES}</div>`;
+  }
+  if(it.k==='course'){
+    return `<div class="pitem course" data-k="${it.k}" style="${st}"><b>오늘의 코스</b>${(entry.course||[]).map(esc).join(' → ')}${HANDLES}</div>`;
+  }
+  if(/^t\d+$/.test(it.k)){
+    const parts=(entry.body||'').split(/\n{2,}/).map(s=>s.trim()).filter(Boolean);
+    const txt=parts[+it.k.slice(1)]||'';
+    return `<div class="pitem text" data-k="${it.k}" style="${st}">${esc(txt)}${HANDLES}</div>`;
+  }
+  const i=+it.k.slice(1), p=photos[i];
+  if(!p) return '';
+  return `<div class="pitem photo" data-k="${it.k}" style="${st}">
+    <figure><img src="${p.s}" alt="${esc(p.c||'')}" draggable="false">${p.c?`<figcaption>${esc(p.c)}</figcaption>`:''}</figure>${HANDLES}</div>`;
+}
+function coverPageHTML(t){
+  const cv=(t.covers||[]).slice(0,3);
+  return `<div class="page" data-cover="1"><div class="inner"><div class="coverpage">
+    ${cv.length?`<div class="collage">
+      ${cv[0]?`<figure class="c1"><img src="${cv[0]}" alt=""></figure>`:''}
+      ${cv[1]?`<figure class="c2"><img src="${cv[1]}" alt=""></figure>`:''}
+      ${cv[2]?`<figure class="c3"><img src="${cv[2]}" alt=""></figure>`:''}</div>`:''}
+    <div class="rule"></div>
+    <div class="date">${fmtRange(t.start,t.end)}</div>
+    <h2>${esc(t.title)}</h2>
+    ${t.region?`<p class="region">(${esc(t.region)})</p>`:''}
+    ${t.party?`<p class="party">${esc(t.party)}</p>`:''}
+    <div class="rule"></div>
+  </div></div></div>`;
+}
+function proseCage(title,text){
+  return `<div class="page"><div class="inner">
+    <div class="pitem title" style="left:8%;top:12%;width:84%">${esc(title)}</div>
+    <div class="pitem text" style="left:10%;top:26%;width:76%;font-size:.74em">${esc(text)}</div>
+  </div></div>`;
+}
+let pageSeq=[];   // [{type:'cover'|'prose'|'day', entryId, pageIdx}]
+async function renderPages(){
+  const panel=$('#tabpanel'), t=trip();
+  panel.innerHTML=`<p class="pagehint">지면을 만드는 중…</p>`;
+  let html=`<div class="pagebar">
+      <button class="btn ghost sm" data-act="toggle-edit" aria-pressed="${state.edit}">${state.edit?'배치 끝내기':'배치 바꾸기'}</button>
+      <button class="btn ghost sm" data-act="relayout">자동 배치로</button>
+      <span class="grow"></span>
+      <button class="btn ghost sm" data-act="print">인쇄 · PDF</button>
+    </div>
+    <p class="pagehint">${state.edit?'사진이나 글을 끌면 자리가 옮겨집니다. 한 번 누르면 모서리에 손잡이 두 개가 생기는데, 오른쪽 아래 ⤡ 를 끌면 크기가, 오른쪽 위 ↻ 를 끌면 기울기가 자유롭게 바뀝니다.':'페이지에서 만드셨던 것처럼 사진과 글이 지면에 배치됩니다. 마음에 안 들면 배치를 직접 바꿀 수 있어요.'}</p>
+    <div class="pagewrap${state.edit?' editing':''}" id="pagewrap">`;
+  pageSeq=[];
+  html+=coverPageHTML(t); pageSeq.push({type:'cover'});
+  if(t.prologue){ html+=proseCage('여행을 준비하며',t.prologue); pageSeq.push({type:'prose'}); }
+  for(const e of state.entries){
+    const photos=e.photoCount?await photosOf(e.id):[];
+    const ratios=await Promise.all(photos.map(p=>measure(p.s)));
+    if(!layoutValid(e.layout,e,photos.length)){ e.layout=autoLayout(e,photos,ratios); }
+    e.layout.forEach((items,pi)=>{
+      html+=`<div class="page" data-entry="${e.id}" data-page="${pi}"><div class="inner">${items.map(it=>itemHTML(it,e,photos)).join('')}</div><div class="pnum">${e.date}</div></div>`;
+      pageSeq.push({type:'day',entryId:e.id,pageIdx:pi});
+    });
+  }
+  if(t.epilogue){ html+=proseCage('여행을 마치며',t.epilogue); pageSeq.push({type:'prose'}); }
+  html+='</div>';
+  panel.innerHTML=html;
+  scalePages();
+  await S.set(K.entries(state.tripId),state.entries);
+}
+function scalePages(){
+  $$('#pagewrap .page').forEach(p=>{ p.style.fontSize=(p.clientWidth*0.0265)+'px'; });
+}
+window.addEventListener('resize',()=>{ if(state.tab==='pages') scalePages(); });
+
+/* --- 자유 배치: 옮기기 / 크기 / 회전 --- */
+let drag=null;
+function selectItem(item,page){
+  $$('.pitem.sel').forEach(x=>x.classList.remove('sel'));
+  item.classList.add('sel');
+  state.sel={entryId:page.dataset.entry,pageIdx:+page.dataset.page,k:item.dataset.k};
+  showBar();
+}
+document.addEventListener('pointerdown',ev=>{
+  if(!state.edit||state.tab!=='pages') return;
+  const item=ev.target.closest('.pitem'); if(!item) return;
+  const page=item.closest('.page'); if(!page||!page.dataset.entry) return;
+  ev.preventDefault();
+  const handle=ev.target.closest('.phandle');
+  const mode=handle?handle.dataset.h:'move';
+  if(!handle) selectItem(item,page);
+  else if(!item.classList.contains('sel')) selectItem(item,page);
+  const r=page.getBoundingClientRect(), ir=item.getBoundingClientRect();
+  const o={x:parseFloat(item.style.left)||0,y:parseFloat(item.style.top)||0,
+           w:parseFloat(item.style.width)||30,
+           rot:parseFloat((item.style.transform.match(/-?[\d.]+/)||[0])[0])||0};
+  drag={item,page,r,mode,o,cur:{...o},
+        sx:ev.clientX,sy:ev.clientY,
+        cx:ir.left+ir.width/2, cy:ir.top+ir.height/2,
+        a0:Math.atan2(ev.clientY-(ir.top+ir.height/2), ev.clientX-(ir.left+ir.width/2))};
+  try{ (handle||item).setPointerCapture(ev.pointerId); }catch(e){}
+});
+document.addEventListener('pointermove',ev=>{
+  if(!drag) return;
+  const {item,r,cur,o,mode}=drag;
+  if(mode==='move'){
+    const dx=(ev.clientX-drag.sx)/r.width*100, dy=(ev.clientY-drag.sy)/r.height*100;
+    cur.x=Math.max(-8,Math.min(100,o.x+dx));
+    cur.y=Math.max(-6,Math.min(100,o.y+dy));
+    item.style.left=cur.x.toFixed(2)+'%'; item.style.top=cur.y.toFixed(2)+'%';
+  }else if(mode==='size'){
+    const dx=(ev.clientX-drag.sx)/r.width*100;
+    cur.w=Math.max(8,Math.min(96,o.w+dx*1.7));
+    item.style.width=cur.w.toFixed(2)+'%';
+  }else{
+    const a=Math.atan2(ev.clientY-drag.cy,ev.clientX-drag.cx);
+    cur.rot=o.rot+(a-drag.a0)*180/Math.PI;
+    item.style.transform=`rotate(${cur.rot.toFixed(1)}deg)`;
+  }
+});
+document.addEventListener('pointerup',async ()=>{
+  if(!drag) return;
+  const it=findItem(drag.page.dataset.entry,+drag.page.dataset.page,drag.item.dataset.k);
+  if(it){
+    it.x=+drag.cur.x.toFixed(2); it.y=+drag.cur.y.toFixed(2);
+    it.w=+drag.cur.w.toFixed(2); it.rot=+drag.cur.rot.toFixed(1);
+    await saveLayout();
+  }
+  drag=null;
+});
+function findItem(entryId,pageIdx,k){
+  const e=state.entries.find(x=>x.id===entryId);
+  return e&&e.layout&&e.layout[pageIdx]?e.layout[pageIdx].find(i=>i.k===k):null;
+}
+async function saveLayout(){ await S.set(K.entries(state.tripId),state.entries); }
+function showBar(){
+  $('#bar-root').innerHTML=`<div class="itembar">
+    <button data-act="it" data-op="w-">− 작게</button>
+    <button data-act="it" data-op="w+">+ 크게</button>
+    <button data-act="it" data-op="r0">기울기 0</button>
+    <button data-act="it" data-op="front">맨 앞</button>
+    <button data-act="it" data-op="done">선택 해제</button>
+  </div>`;
+}
+function hideBar(){ $('#bar-root').innerHTML=''; }
+async function itemOp(op){
+  if(!state.sel) return;
+  if(op==='done'){ state.sel=null; hideBar(); $$('.pitem.sel').forEach(x=>x.classList.remove('sel')); return; }
+  const it=findItem(state.sel.entryId,state.sel.pageIdx,state.sel.k); if(!it) return;
+  if(op==='w+') it.w=Math.min(92,+(it.w+4).toFixed(1));
+  if(op==='w-') it.w=Math.max(12,+(it.w-4).toFixed(1));
+  if(op==='r0') it.rot=0;
+  if(op==='front') it.z=(Math.max(0,...(state.entries.find(e=>e.id===state.sel.entryId).layout[state.sel.pageIdx].map(i=>i.z||0)))+1);
+  const el=[...$$('#pagewrap .page')].find(p=>p.dataset.entry===state.sel.entryId&&+p.dataset.page===state.sel.pageIdx)
+            ?.querySelector(`.pitem[data-k="${state.sel.k}"]`);
+  if(el){ el.style.width=it.w+'%'; el.style.transform=`rotate(${it.rot||0}deg)`; if(it.z) el.style.zIndex=it.z; }
+  await saveLayout();
+}
+async function relayout(){
+  if(!confirm('이 여행의 모든 지면을 자동 배치로 되돌릴까요? 직접 옮긴 배치는 사라집니다.')) return;
+  state.entries.forEach(e=>{ delete e.layout; });
+  await S.set(K.entries(state.tripId),state.entries);
+  renderPages(); toast('자동 배치로 되돌렸습니다.');
+}
+
+/* ============ 여정 ============ */
+function timelineHTML(){
+  const t=trip(); let h='';
+  if(t.prologue) h+=`<div class="note-block"><h5>여행을 준비하며</h5><p>${esc(t.prologue)}</p></div>`;
+  if(!state.entries.length) return h+`<div class="empty"><strong>아직 기록이 없습니다</strong><p>하루를 마치며 코스와 사진, 그날의 이야기를 남겨 보세요.</p><button class="btn" data-act="new-entry">하루 기록 추가</button></div>`;
+  h+=`<div class="timeline">${state.entries.map(e=>{
+    const d=dayLabel(e.date),n=dayIndex(e.date);
+    const shots=(e.shots||[]).slice(0,3);
+    const linked=(e.placeIds||[]).map(id=>state.places.find(p=>p.id===id)).filter(Boolean);
+    return `<div class="day"><div class="daystamp">${n?`<b>${ordinal(n)}</b>`:''}<span class="dn">${d.dn}</span>${esc(d.wd)}</div>
+      <article class="entry"><div class="entry-top"><div style="min-width:0">
+        <div class="chips">${e.weather?`<span class="chip">${e.weather}</span>`:''}${e.mood?`<span class="chip">${e.mood}</span>`:''}${linked.map(p=>`<span class="chip">📍 ${esc(p.name)}</span>`).join('')}</div>
+        <h4>${esc(e.title||'무제')}</h4></div>
+        <div class="entry-actions"><button class="icon-btn" data-act="edit-entry" data-id="${e.id}">✎</button><button class="icon-btn" data-act="del-entry" data-id="${e.id}">🗑</button></div></div>
+        ${(e.course||[]).length?`<div class="course"><div class="clabel">오늘의 코스</div><div class="flow">${e.course.map(s=>`<span class="step">${esc(s)}</span>`).join('<span class="arw">→</span>')}</div></div>`:''}
+        ${e.body?`<p class="body">${esc(e.body)}</p>`:''}
+        ${e.photoCount?`<div class="shots">${shots.map((sh,i)=>`<figure class="shot" data-act="open-photos" data-id="${e.id}" data-i="${i}" role="button" tabindex="0"><img src="${sh.s}" alt=""/>${sh.c?`<figcaption>${esc(sh.c)}</figcaption>`:''}</figure>`).join('')}
+        ${e.photoCount>shots.length?`<button class="shot more" data-act="open-photos" data-id="${e.id}" data-i="0">사진 ${e.photoCount}장<br>모두 보기</button>`:''}</div>`:''}
+      </article></div>`;}).join('')}</div>`;
+  if(t.epilogue) h+=`<div class="note-block"><h5>여행을 마치며</h5><p>${esc(t.epilogue)}</p></div>`;
+  return h;
+}
+
+/* ============ 장소 ============ */
+function placesHTML(){
+  if(!state.places.length) return `<div class="empty"><strong>등록된 장소가 없습니다</strong><p>숙소와 식당을 남겨 두면 다음 여행에 그대로 쓸 수 있습니다.</p><button class="btn" data-act="new-place">장소 추가</button></div>`;
+  const cats=['all',...Object.keys(CATS)];
+  const list=state.places.filter(p=>state.filter==='all'||p.cat===state.filter);
+  return `<div class="filters">${cats.map(c=>`<button class="filter" data-act="filter" data-cat="${c}" aria-pressed="${state.filter===c}">${c==='all'?'전체':CATS[c].label}</button>`).join('')}</div>
+  <div class="place-list">${list.map(p=>`<div class="place"><span class="dot" style="background:${CATS[p.cat].hex}"></span>
+    <div class="place-main"><h4>${esc(p.name)} <span class="cat-label">${CATS[p.cat].label}</span></h4>
+    ${p.rating?`<div class="stars">${'★'.repeat(p.rating)}${'☆'.repeat(5-p.rating)}</div>`:''}
+    ${p.note?`<p class="note">${esc(p.note)}</p>`:''}
+    ${p.lat!=null?`<div class="geo">${p.lat.toFixed(4)}, ${p.lng.toFixed(4)} · <a href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}" target="_blank" rel="noopener" style="color:var(--muted)">지도에서 열기</a></div>`:''}</div>
+    <div class="entry-actions"><button class="icon-btn" data-act="edit-place" data-id="${p.id}">✎</button><button class="icon-btn" data-act="del-place" data-id="${p.id}">🗑</button></div></div>`).join('')||'<p class="map-note">이 분류로 등록된 장소가 없습니다.</p>'}</div>`;
+}
+
+/* ============ 지도 ============ */
+let leafletTried=false,mapObj=null,tileFails=0;
+function loadLeaflet(){return new Promise(res=>{
+  if(window.L)return res(true); if(leafletTried&&!window.L)return res(false); leafletTried=true;
+  const c=document.createElement('link');c.rel='stylesheet';c.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';document.head.appendChild(c);
+  const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+  s.onload=()=>res(true);s.onerror=()=>res(false);document.head.appendChild(s);setTimeout(()=>res(!!window.L),6000);});}
+async function mountMap(){
+  const pts=state.places.filter(p=>p.lat!=null),box=$('#map'); if(!box)return;
+  if(!pts.length){box.outerHTML=`<div class="empty"><strong>지도에 표시할 장소가 없습니다</strong><p>장소에 위치를 넣으면 다녀온 자리가 찍힙니다.</p><button class="btn" data-act="new-place">장소 추가</button></div>`;return;}
+  if(!await loadLeaflet()){box.outerHTML=fallbackMap(pts);const n=$('#mapnote');if(n)n.textContent='지도를 불러오지 못해 좌표 배치도로 표시했습니다.';return;}
+  if(mapObj){mapObj.remove();mapObj=null;}
+  mapObj=L.map('map',{scrollWheelZoom:false});tileFails=0;
+  const layer=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'});
+  layer.on('tileerror',()=>{if(++tileFails===4){const n=$('#mapnote');if(n)n.textContent='지도 배경을 불러오지 못했지만 위치는 정확합니다.';}});
+  layer.addTo(mapObj);
+  const g=[];
+  pts.forEach(p=>{const icon=L.divIcon({html:`<div class="pin" style="background:${CATS[p.cat].hex}"></div>`,className:'',iconSize:[20,20],iconAnchor:[10,18]});
+    L.marker([p.lat,p.lng],{icon}).addTo(mapObj).bindPopup(`<b>${esc(p.name)}</b><br>${CATS[p.cat].label}${p.note?'<br>'+esc(p.note):''}`);g.push([p.lat,p.lng]);});
+  mapObj.fitBounds(L.latLngBounds(g).pad(.25),{maxZoom:14});
+  mapObj.on('click',ev=>{if(!state.pickMode)return;state.pickMode=false;openPlaceSheet(null,{lat:+ev.latlng.lat.toFixed(5),lng:+ev.latlng.lng.toFixed(5)});});
+  const n=$('#mapnote'); if(n&&!n.textContent) n.textContent='핀 색은 분류를 뜻합니다 — 명소·맛집·숙소·카페·기타.';
+}
+function fallbackMap(pts){
+  const la=pts.map(p=>p.lat),ln=pts.map(p=>p.lng);
+  let mnLa=Math.min(...la),mxLa=Math.max(...la),mnLn=Math.min(...ln),mxLn=Math.max(...ln);
+  const py=Math.max((mxLa-mnLa)*.25,.02),px=Math.max((mxLn-mnLn)*.25,.02);
+  mnLa-=py;mxLa+=py;mnLn-=px;mxLn+=px;
+  const W=760,H=420,x=v=>((v-mnLn)/(mxLn-mnLn))*(W-70)+40,y=v=>H-40-((v-mnLa)/(mxLa-mnLa))*(H-70);
+  let g='';
+  for(let i=0;i<=4;i++){const gx=40+i*(W-70)/4,gy=H-40-i*(H-70)/4;
+    g+=`<line x1="${gx}" y1="20" x2="${gx}" y2="${H-40}" stroke="var(--line-soft)"/><line x1="40" y1="${gy}" x2="${W-30}" y2="${gy}" stroke="var(--line-soft)"/>`;
+    g+=`<text x="${gx+3}" y="${H-26}">${(mnLn+(mxLn-mnLn)*i/4).toFixed(2)}</text><text x="4" y="${gy-3}">${(mnLa+(mxLa-mnLa)*i/4).toFixed(2)}</text>`;}
+  return `<svg class="fallmap" viewBox="0 0 ${W} ${H}">${g}${pts.map(p=>`<g><circle cx="${x(p.lng)}" cy="${y(p.lat)}" r="6" fill="${CATS[p.cat].hex}" stroke="#fff" stroke-width="2"/><text x="${x(p.lng)+10}" y="${y(p.lat)+3}" style="font-size:11px;fill:var(--ink)">${esc(p.name)}</text></g>`).join('')}</svg>`;
+}
+
+/* ============ 사진 처리 ============ */
+function readImage(file,max,q){return new Promise((res,rej)=>{const fr=new FileReader();
+  fr.onload=()=>{const img=new Image();img.onload=()=>{const sc=Math.min(1,max/Math.max(img.width,img.height));
+    const c=document.createElement('canvas');c.width=Math.round(img.width*sc);c.height=Math.round(img.height*sc);
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',q));};
+    img.onerror=()=>rej(0);img.src=fr.result;};fr.onerror=()=>rej(0);fr.readAsDataURL(file);});}
+function shrink(u,size,q){return new Promise(res=>{const img=new Image();
+  img.onload=()=>{const sc=Math.min(1,size/Math.max(img.width,img.height));const c=document.createElement('canvas');
+    c.width=Math.round(img.width*sc);c.height=Math.round(img.height*sc);c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    res(c.toDataURL('image/jpeg',q));};img.onerror=()=>res('');img.src=u;});}
+
+/* ============ 모달 ============ */
+function closeSheet(){$('#modal-root').innerHTML='';}
+function sheet(h){$('#modal-root').innerHTML=`<div class="overlay" data-act="overlay"><div class="sheet" role="dialog" aria-modal="true">${h}</div></div>`;
+  const f=$('#modal-root').querySelector('input,textarea'); if(f) setTimeout(()=>f.focus(),50);}
+
+function openTripSheet(t){
+  const e=t||{title:'',region:'',party:'',start:today(),end:'',prologue:'',epilogue:''};
+  sheet(`<h3>${t?'표지·서문 수정':'새 여행일지'}</h3>
+    <div class="field"><label for="f-title">제목</label><input id="f-title" type="text" value="${esc(e.title)}" placeholder="예: 여름 가족 여행"></div>
+    <div class="field"><label for="f-region">지역</label><input id="f-region" type="text" value="${esc(e.region)}" placeholder="예: 경기도 양평, 인천 영종도"></div>
+    <div class="row"><div class="field"><label for="f-start">시작일</label><input id="f-start" type="date" value="${e.start||''}"></div>
+    <div class="field"><label for="f-end">종료일</label><input id="f-end" type="date" value="${e.end||''}"></div></div>
+    <div class="field"><label for="f-party">함께한 사람</label><textarea id="f-party" style="min-height:64px" placeholder="장상원 최난경&#10;장유현 장유정">${esc(e.party)}</textarea></div>
+    <div class="field"><label for="f-pro">여행을 준비하며</label><textarea id="f-pro">${esc(e.prologue)}</textarea></div>
+    <div class="field"><label for="f-epi">여행을 마치며</label><textarea id="f-epi" style="min-height:80px">${esc(e.epilogue)}</textarea></div>
+    <div class="sheet-actions">${t?`<button class="btn danger sm" data-act="del-trip">여행 삭제</button>`:''}
+      <button class="btn ghost" data-act="cancel">취소</button><button class="btn" data-act="save-trip" data-id="${t?t.id:''}">저장</button></div>`);
+}
+async function saveTrip(id){
+  const title=$('#f-title').value.trim(); if(!title){toast('여행 제목을 입력해 주세요.');return;}
+  const data={title,region:$('#f-region').value.trim(),party:$('#f-party').value.trim(),start:$('#f-start').value,end:$('#f-end').value,
+    prologue:$('#f-pro').value.trim(),epilogue:$('#f-epi').value.trim()};
+  if(id) Object.assign(state.trips.find(t=>t.id===id),data);
+  else{const t={id:uid(),entryCount:0,placeCount:0,covers:[],...data};state.trips.push(t);state.tripId=t.id;}
+  await S.set(K.trips,state.trips); closeSheet();
+  if(id){renderTrip();toast('저장했습니다.');}
+  else{await loadTrip(state.tripId);state.tab='pages';renderTrip();toast('여행일지를 만들었습니다.');}
+}
+async function deleteTrip(){
+  const id=state.tripId; if(!id)return;
+  if(!confirm('이 여행의 기록과 사진이 모두 지워집니다. 삭제할까요?'))return;
+  for(const e of await S.get(K.entries(id),[])) await S.del(K.photos(e.id));
+  await S.del(K.entries(id)); await S.del(K.places(id));
+  state.trips=state.trips.filter(t=>t.id!==id); await S.set(K.trips,state.trips);
+  closeSheet(); renderHome(); toast('여행일지를 삭제했습니다.');
+}
+async function syncTripMeta(){
+  const t=trip(); if(!t)return;
+  t.entryCount=state.entries.length; t.placeCount=state.places.length;
+  const cv=[]; for(const e of state.entries) for(const s of (e.shots||[])) if(cv.length<3) cv.push(s.s);
+  if(!t.coverFixed) t.covers=cv;
+  await S.set(K.trips,state.trips);
+}
+
+let workPhotos=[];
+function openEntrySheet(entry){
+  const t=trip();
+  const e=entry||{date:(t.start&&t.start>today())?t.start:today(),title:'',body:'',mood:'',weather:'',course:[],placeIds:[]};
+  workPhotos=[];
+  sheet(`<h3>${entry?'기록 수정':'하루 기록'}</h3>
+    <div class="field"><label for="f-date">날짜</label><input id="f-date" type="date" value="${e.date||today()}"></div>
+    <div class="field"><label for="f-etitle">제목</label><input id="f-etitle" type="text" value="${esc(e.title)}" placeholder="예: 양평 5일장, 그리고 풀빌라"></div>
+    <div class="field"><label for="f-course">오늘의 코스</label><input id="f-course" type="text" value="${esc((e.course||[]).join(' → '))}" placeholder="양평 5일장 → 점심식사 → 테라로사 → 숙소">
+      <p class="hint">→ 또는 -&gt; 로 구분합니다.</p></div>
+    <div class="field"><label>날씨</label><div class="opts" data-group="weather">${WEATHERS.map(([l,i])=>`<button type="button" class="opt" data-act="opt" data-group="weather" data-val="${i} ${l}" aria-pressed="${e.weather===i+' '+l}">${i} ${l}</button>`).join('')}</div></div>
+    <div class="field"><label>기분</label><div class="opts" data-group="mood">${MOODS.map(([l,i])=>`<button type="button" class="opt" data-act="opt" data-group="mood" data-val="${i} ${l}" aria-pressed="${e.mood===i+' '+l}">${i} ${l}</button>`).join('')}</div></div>
+    <div class="field"><label for="f-body">그날의 이야기</label><textarea id="f-body" placeholder="줄을 두 번 바꾸면 지면에서 문단이 나뉘어 배치됩니다.">${esc(e.body)}</textarea></div>
+    ${state.places.length?`<div class="field"><label>다녀온 장소</label><div class="opts">${state.places.map(p=>`<button type="button" class="opt" data-act="optmulti" data-val="${p.id}" aria-pressed="${(e.placeIds||[]).includes(p.id)}">${esc(p.name)}</button>`).join('')}</div></div>`:''}
+    <div class="field"><label>사진과 한 줄 설명</label>
+      <label class="filedrop" for="f-photos">눌러서 사진 선택 · 크기를 줄여 저장합니다<input id="f-photos" type="file" accept="image/*" multiple hidden></label>
+      <div class="pvlist" id="pvlist"></div><p class="hint" id="photohint">설명은 지면에서 사진 아래에 붙습니다.</p></div>
+    <div class="sheet-actions"><button class="btn ghost" data-act="cancel">취소</button>
+      <button class="btn" data-act="save-entry" data-id="${entry?entry.id:''}">저장</button></div>`);
+  $('#f-photos').addEventListener('change',onPickPhotos);
+  if(entry&&entry.photoCount){ $('#photohint').textContent='기존 사진을 불러오는 중…';
+    photosOf(entry.id).then(ph=>{workPhotos=ph.map(p=>({...p}));drawPreviews();$('#photohint').textContent='설명은 지면에서 사진 아래에 붙습니다.';}); }
+}
+async function onPickPhotos(ev){
+  const files=[...ev.target.files]; ev.target.value=''; if(!files.length)return;
+  $('#photohint').textContent='사진을 정리하는 중…';
+  for(const f of files){ try{ workPhotos.push({s:await readImage(f,1200,.72),c:''}); }catch(e){ toast('사진 한 장을 읽지 못했습니다.'); } }
+  drawPreviews(); $('#photohint').textContent=`사진 ${workPhotos.length}장`;
+}
+function captureCaptions(){ $$('#pvlist .pvrow input').forEach((i,x)=>{ if(workPhotos[x]) workPhotos[x].c=i.value; }); }
+function drawPreviews(){
+  const b=$('#pvlist'); if(!b)return;
+  b.innerHTML=workPhotos.map((p,i)=>`<div class="pvrow"><img src="${p.s}" alt="">
+    <input type="text" value="${esc(p.c)}" placeholder="한 줄 설명"><button type="button" data-act="rmphoto" data-i="${i}">×</button></div>`).join('');
+}
+async function saveEntry(id){
+  captureCaptions();
+  const entry=id?state.entries.find(e=>e.id===id):{id:uid()};
+  const before=entry.photoCount||0;
+  entry.date=$('#f-date').value||today();
+  entry.title=$('#f-etitle').value.trim();
+  entry.body=$('#f-body').value.trim();
+  entry.course=parseCourse($('#f-course').value);
+  entry.mood=$('#modal-root').querySelector('[data-group="mood"] [aria-pressed="true"]')?.dataset.val||'';
+  entry.weather=$('#modal-root').querySelector('[data-group="weather"] [aria-pressed="true"]')?.dataset.val||'';
+  entry.placeIds=[...$$('#modal-root [data-act="optmulti"][aria-pressed="true"]')].map(b=>b.dataset.val);
+  entry.photoCount=workPhotos.length;
+  entry.shots=[];
+  for(const p of workPhotos.slice(0,3)) entry.shots.push({s:(await shrink(p.s,320,.6))||p.s,c:p.c||''});
+  if(before!==workPhotos.length) delete entry.layout;   // 사진이 바뀌면 지면 다시 배치
+  if(!id) state.entries.push(entry);
+  state.entries.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  state.photoCache[entry.id]=workPhotos.map(p=>({s:p.s,c:p.c||''}));
+  const okP=workPhotos.length?await S.set(K.photos(entry.id),state.photoCache[entry.id]):(await S.del(K.photos(entry.id)),true);
+  const ok=await S.set(K.entries(state.tripId),state.entries);
+  await syncTripMeta();
+  if(ok&&okP){ closeSheet(); renderTrip(); toast('기록을 저장했습니다.'); }
+}
+async function delEntry(id){
+  if(!confirm('이 기록과 사진을 삭제할까요?'))return;
+  await S.del(K.photos(id)); delete state.photoCache[id];
+  state.entries=state.entries.filter(e=>e.id!==id);
+  await S.set(K.entries(state.tripId),state.entries);
+  await syncTripMeta(); renderTrip(); toast('기록을 삭제했습니다.');
+}
+
+function openPlaceSheet(place,preset){
+  const p=place||{name:'',cat:'sight',note:'',rating:0,lat:preset?preset.lat:null,lng:preset?preset.lng:null};
+  sheet(`<h3>${place?'장소 수정':'장소 추가'}</h3>
+    <div class="field"><label for="p-name">이름</label><input id="p-name" type="text" value="${esc(p.name)}"></div>
+    <div class="field"><label>분류</label><div class="opts" data-group="cat">${Object.entries(CATS).map(([k,v])=>`<button type="button" class="opt" data-act="opt" data-group="cat" data-val="${k}" aria-pressed="${p.cat===k}">${v.label}</button>`).join('')}</div></div>
+    <div class="field"><label>별점</label><div class="opts" data-group="rating">${[1,2,3,4,5].map(n=>`<button type="button" class="opt" data-act="opt" data-group="rating" data-val="${n}" aria-pressed="${p.rating===n}">${'★'.repeat(n)}</button>`).join('')}</div></div>
+    <div class="field"><label for="p-note">솔직한 메모</label><textarea id="p-note">${esc(p.note)}</textarea></div>
+    <div class="field"><label for="p-city">위치</label>
+      <select id="p-city"><option value="">도시를 골라 좌표 넣기</option>${CITIES.map(([n,la,ln])=>`<option value="${la},${ln}">${n}</option>`).join('')}</select>
+      <div class="row" style="margin-top:8px"><input id="p-lat" type="number" step="0.00001" placeholder="위도" value="${p.lat??''}"><input id="p-lng" type="number" step="0.00001" placeholder="경도" value="${p.lng??''}"></div></div>
+    <div class="sheet-actions"><button class="btn ghost" data-act="cancel">취소</button><button class="btn" data-act="save-place" data-id="${place?place.id:''}">저장</button></div>`);
+  $('#p-city').addEventListener('change',ev=>{if(!ev.target.value)return;const[a,b]=ev.target.value.split(',');$('#p-lat').value=a;$('#p-lng').value=b;});
+}
+async function savePlace(id){
+  const name=$('#p-name').value.trim(); if(!name){toast('장소 이름을 입력해 주세요.');return;}
+  const lat=parseFloat($('#p-lat').value),lng=parseFloat($('#p-lng').value);
+  const data={name,cat:$('#modal-root').querySelector('[data-group="cat"] [aria-pressed="true"]')?.dataset.val||'etc',
+    rating:parseInt($('#modal-root').querySelector('[data-group="rating"] [aria-pressed="true"]')?.dataset.val||'0'),
+    note:$('#p-note').value.trim(),lat:isNaN(lat)?null:lat,lng:isNaN(lng)?null:lng};
+  if(id) Object.assign(state.places.find(p=>p.id===id),data); else state.places.push({id:uid(),...data});
+  await S.set(K.places(state.tripId),state.places); await syncTripMeta();
+  closeSheet(); renderTrip(); toast('장소를 저장했습니다.');
+}
+async function delPlace(id){
+  if(!confirm('이 장소를 삭제할까요?'))return;
+  state.places=state.places.filter(p=>p.id!==id);
+  state.entries.forEach(e=>{if(e.placeIds)e.placeIds=e.placeIds.filter(x=>x!==id);});
+  await S.set(K.places(state.tripId),state.places); await S.set(K.entries(state.tripId),state.entries);
+  await syncTripMeta(); renderTab(); toast('장소를 삭제했습니다.');
+}
+
+/* ============ 라이트박스 ============ */
+let lbPhotos=[],lbIdx=0;
+async function openPhotos(id,i){
+  lbPhotos=await photosOf(id);
+  if(!lbPhotos.length){toast('사진을 찾지 못했습니다.');return;}
+  lbIdx=Math.min(i||0,lbPhotos.length-1); drawLB();
+}
+function drawLB(){
+  const p=lbPhotos[lbIdx];
+  $('#lb-root').innerHTML=`<div class="lb" data-act="lb-bg">
+    <div class="lbbar"><button class="btn ghost sm" data-act="lb-close" style="background:transparent;color:#fff;border-color:rgba(255,255,255,.4)">닫기</button></div>
+    ${lbPhotos.length>1?`<button class="nav prev" data-act="lb-prev">‹</button><button class="nav next" data-act="lb-next">›</button>`:''}
+    <div style="display:grid;place-items:center"><img src="${p.s}" alt="">${p.c?`<div class="cap">${esc(p.c)}</div>`:''}</div>
+    <div class="count">${lbIdx+1} / ${lbPhotos.length}</div></div>`;
+}
+function closeLB(){$('#lb-root').innerHTML='';lbPhotos=[];}
+
+/* ============ 백업 ============ */
+function openDataSheet(){
+  sheet(`<h3>데이터</h3><p class="hint" style="margin:-6px 0 16px">백업 파일로 내려받아 보관하거나 다른 기기에서 불러올 수 있습니다.</p>
+    <div class="sheet-actions" style="justify-content:flex-start">
+      <button class="btn ghost" data-act="export">백업 내보내기</button>
+      <label class="btn ghost" for="f-import" style="display:inline-block">백업 불러오기<input id="f-import" type="file" accept="application/json" hidden></label></div>
+    <div class="sheet-actions"><button class="btn" data-act="cancel">닫기</button></div>`);
+  $('#f-import').addEventListener('change',onImport);
+}
+async function exportAll(){
+  toast('백업 파일을 만드는 중…');
+  const out={version:2,exportedAt:new Date().toISOString(),trips:state.trips,data:{}};
+  for(const t of state.trips){
+    const entries=await S.get(K.entries(t.id),[]),places=await S.get(K.places(t.id),[]),photos={};
+    for(const e of entries) if(e.photoCount) photos[e.id]=await S.get(K.photos(e.id),[]);
+    out.data[t.id]={entries,places,photos};
+  }
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(out)],{type:'application/json'}));
+  a.download=`여행일지-백업-${today()}.json`; a.click(); URL.revokeObjectURL(a.href);
+  toast('백업 파일을 내려받았습니다.');
+}
+async function onImport(ev){
+  const f=ev.target.files[0]; ev.target.value=''; if(!f)return;
+  try{
+    const raw=JSON.parse(await f.text()); if(!raw.trips) throw 0;
+    if(!confirm('백업의 여행을 현재 목록에 더합니다. 계속할까요?'))return;
+    for(const t of raw.trips){
+      const nid=uid(),d=raw.data[t.id]||{entries:[],places:[],photos:{}},map={};
+      const entries=(d.entries||[]).map(e=>{const ni=uid();map[e.id]=ni;return{...e,id:ni};});
+      await S.set(K.entries(nid),entries); await S.set(K.places(nid),d.places||[]);
+      for(const [oid,ph] of Object.entries(d.photos||{})) if(map[oid]) await S.set(K.photos(map[oid]),ph);
+      state.trips.push({...t,id:nid});
+    }
+    await S.set(K.trips,state.trips); closeSheet(); renderHome(); toast('백업을 불러왔습니다.');
+  }catch(e){ toast('파일을 읽지 못했습니다. 이 앱에서 내보낸 백업인지 확인해 주세요.'); }
+}
+
+/* ============ 이벤트 ============ */
+document.addEventListener('click',async ev=>{
+  const el=ev.target.closest('[data-act]'); if(!el) return;
+  const act=el.dataset.act,id=el.dataset.id;
+  switch(act){
+    case 'home': renderHome(); break;
+    case 'open': await loadTrip(id); state.tab='pages'; state.filter='all'; renderTrip(); break;
+    case 'tab': state.tab=el.dataset.tab; state.pickMode=false; renderTrip(); break;
+    case 'filter': state.filter=el.dataset.cat; renderTab(); break;
+    case 'toggle-edit': state.edit=!state.edit; renderPages(); break;
+    case 'relayout': await relayout(); break;
+    case 'it': await itemOp(el.dataset.op); break;
+    case 'print': window.print(); break;
+    case 'pick': state.pickMode=!state.pickMode; el.setAttribute('aria-pressed',state.pickMode);
+      el.textContent=state.pickMode?'선택 중 · 지도를 누르세요':'지도를 눌러 장소 추가'; break;
+    case 'new-trip': openTripSheet(null); break;
+    case 'edit-trip': openTripSheet(trip()); break;
+    case 'save-trip': await saveTrip(id); break;
+    case 'del-trip': await deleteTrip(); break;
+    case 'new-entry': openEntrySheet(null); break;
+    case 'edit-entry': openEntrySheet(state.entries.find(e=>e.id===id)); break;
+    case 'save-entry': await saveEntry(id); break;
+    case 'del-entry': await delEntry(id); break;
+    case 'new-place': openPlaceSheet(null); break;
+    case 'edit-place': openPlaceSheet(state.places.find(p=>p.id===id)); break;
+    case 'save-place': await savePlace(id); break;
+    case 'del-place': await delPlace(id); break;
+    case 'open-photos': openPhotos(id,+(el.dataset.i||0)); break;
+    case 'opt': {const was=el.getAttribute('aria-pressed')==='true',g=el.dataset.group;
+      el.closest('.opts').querySelectorAll('.opt').forEach(b=>b.setAttribute('aria-pressed','false'));
+      el.setAttribute('aria-pressed',was&&g!=='cat'?'false':'true'); break;}
+    case 'optmulti': el.setAttribute('aria-pressed',el.getAttribute('aria-pressed')==='true'?'false':'true'); break;
+    case 'rmphoto': captureCaptions(); workPhotos.splice(+el.dataset.i,1); drawPreviews(); break;
+    case 'cancel': closeSheet(); break;
+    case 'overlay': if(ev.target===el) closeSheet(); break;
+    case 'menu': openDataSheet(); break;
+    case 'export': await exportAll(); break;
+    case 'lb-close': closeLB(); break;
+    case 'lb-bg': if(ev.target===el) closeLB(); break;
+    case 'lb-prev': lbIdx=(lbIdx-1+lbPhotos.length)%lbPhotos.length; drawLB(); break;
+    case 'lb-next': lbIdx=(lbIdx+1)%lbPhotos.length; drawLB(); break;
+  }
+});
+document.addEventListener('keydown',ev=>{
+  if(ev.key==='Escape'){ if(lbPhotos.length) closeLB(); else closeSheet(); }
+  if(lbPhotos.length>1){
+    if(ev.key==='ArrowLeft'){lbIdx=(lbIdx-1+lbPhotos.length)%lbPhotos.length;drawLB();}
+    if(ev.key==='ArrowRight'){lbIdx=(lbIdx+1)%lbPhotos.length;drawLB();}
+  }
+});
+
+(async function init(){
+  view.innerHTML='<p class="eyebrow">불러오는 중</p>';
+  await loadTrips(); renderHome();
+})();
+</script>
