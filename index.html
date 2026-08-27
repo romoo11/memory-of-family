@@ -522,7 +522,7 @@ function renderHome(){
       <button class="tab" role="tab" data-act="hometab" data-tab="places" aria-selected="${state.homeTab==='places'}">다녀온 장소</button>
     </div>
     <div id="homepanel"></div>
-    <button class="btn fab" data-act="new-trip">+ 여행 추가</button>`;
+    <button class="btn fab" data-act="new-trip">+ 새 기록</button>`;
   if(state.homeTab==='places') renderAllPlaces(); else renderTripList(list);
   $('#footnote').textContent = window.__memoryOnly ? '이 창을 새로 고치면 기록이 사라집니다.'
     : window.__deviceStore ? '기록은 이 기기에 저장됩니다. 기기를 바꾸거나 브라우저 기록을 지우기 전에 데이터 메뉴에서 백업해 두세요.'
@@ -542,7 +542,7 @@ function renderTripList(list){
       <div class="mini-cover">${th.length?th.map(s=>`<img src="${s}" alt="">`).join(''):'<div class="noimg">사진을 넣으면 표지가 채워집니다</div>'}</div>
       <div class="trip-body"><h3>${esc(t.title)}</h3>
       <div class="trip-meta">${fmtRange(t.start,t.end)}${t.region?' · '+esc(t.region):''}</div>
-      <div class="trip-stats"><span class="pillstat">기록 ${t.entryCount||0}</span><span class="pillstat">장소 ${t.placeCount||0}</span>${days(t.start,t.end)?`<span class="pillstat">${days(t.start,t.end)}일</span>`:''}</div>
+      <div class="trip-stats">${t.simple?'<span class="pillstat">나들이</span>':''}<span class="pillstat">기록 ${t.entryCount||0}</span><span class="pillstat">장소 ${t.placeCount||0}</span>${days(t.start,t.end)?`<span class="pillstat">${days(t.start,t.end)}일</span>`:''}</div>
     </div></button>`;
   };
   $('#homepanel').innerHTML = list.length
@@ -550,7 +550,7 @@ function renderTripList(list){
         <h2 class="yearhead">${g.year==='날짜 미정'?'날짜 미정':g.year+'년'}<span>${g.items.length}</span></h2>
         <div class="trip-grid">${g.items.map(card).join('')}</div>
       </section>`).join('')
-    : `<div class="empty"><strong>첫 여행일지를 시작해 보세요</strong><p>표지에 제목과 함께한 사람을 적고, 하루마다 사진과 이야기를 남기면 지면으로 배치됩니다.</p><button class="btn" data-act="new-trip">여행 추가</button></div>`;
+    : `<div class="empty"><strong>첫 기록을 시작해 보세요</strong><p>여러 날 여행도, 하루 나들이도 남길 수 있습니다. 사진과 이야기를 넣으면 지면으로 배치됩니다.</p><button class="btn" data-act="new-trip">기록 추가</button></div>`;
 }
 async function loadAllPlaces(){
   const all=[];
@@ -678,6 +678,7 @@ function renderTrip(){
       <button class="btn sm" data-act="new-entry">하루 기록 추가</button>
       <button class="btn ghost sm" data-act="new-place">장소 추가</button>
       <button class="btn ghost sm" data-act="edit-trip">표지·서문 수정</button>
+      <button class="btn ghost sm" data-act="restore-pages">숨긴 지면 되살리기</button>
     </div>
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" data-act="tab" data-tab="pages" aria-selected="${state.tab==='pages'}">지면</button>
@@ -721,57 +722,53 @@ function measure(src){
     i.src=src;
   });
 }
-/* 자동 배치: 두 단으로 흘리되 사진마다 기울기를 준다 */
+/* 자동 배치: 두 단으로 흘리고, 넘치면 지면을 늘린다 */
 function autoLayout(entry,photos,ratios){
   const seed=hash(entry.id);
-  const blocks=[];
-  blocks.push({k:'title',h:9});
-  if((entry.course||[]).length) blocks.push({k:'course',h:6+Math.ceil(entry.course.length/2)*3});
-  (entry.body||'').split(/\n{2,}/).map(s=>s.trim()).filter(Boolean).forEach((t,i)=>blocks.push({k:'t'+i,len:t.length}));
-  photos.forEach((p,i)=>blocks.push({k:'p'+i,aspect:ratios[i]||1.4,cap:(p.c||'').length}));
-  // 사진과 글을 번갈아 섞어 지면이 고르게
-  const texts=blocks.filter(b=>/^t\d+$/.test(b.k)), pics=blocks.filter(b=>/^p\d+$/.test(b.k));
-  const head=blocks.filter(b=>b.k==='title'||b.k==='course');
+  const COLX=[M.l, 51], COLW=43, BOTTOM=100-M.b, GAP=2.4;
+  const pages=[]; let cur=[], col=[M.t,M.t];
+  const flush=()=>{ if(cur.length){ pages.push(cur); } cur=[]; col=[M.t,M.t]; };
+
+  // 제목·코스는 첫 지면 위쪽 전체 폭
+  const head=[{k:'title',h:9}];
+  if((entry.course||[]).length) head.push({k:'course',h:5.5+Math.ceil(entry.course.length/2)*3});
+  head.forEach(b=>{
+    cur.push({id:uid(),k:b.k,x:M.l,y:+col[0].toFixed(2),w:100-M.l-M.r,rot:0});
+    col[0]+=b.h+GAP; col[1]=col[0];
+  });
+
+  // 사진과 글을 번갈아
+  const texts=(entry.body||'').split(/\n{2,}/).map(x=>x.trim()).filter(Boolean)
+    .map((t,i)=>({k:'t'+i,len:t.length}));
+  const pics=photos.map((p,i)=>({k:'p'+i,aspect:ratios[i]||1.4,cap:(p.c||'').length}));
   const mixed=[]; let ti=0,pi=0;
   while(ti<texts.length||pi<pics.length){
     if(pi<pics.length) mixed.push(pics[pi++]);
-    if(pi<pics.length&&pics.length>texts.length*1.6) mixed.push(pics[pi++]);
+    if(pi<pics.length && pics.length>texts.length*1.5) mixed.push(pics[pi++]);
     if(ti<texts.length) mixed.push(texts[ti++]);
   }
-  const pages=[]; let items=[], col=[M.t,M.t], first=true;
-  const colX=[M.l,50+1];
-  const colW=[100-M.l-M.r-52, 0];
-  function newPage(){ if(items.length) pages.push(items); items=[]; col=[M.t,M.t]; first=false; }
-  // 머리(제목·코스)는 첫 페이지 상단 전체 폭
-  head.forEach(b=>{
-    items.push({id:uid(),k:b.k,x:M.l,y:col[0],w:100-M.l-M.r,rot:0});
-    col[0]+=b.h+1.6; col[1]=col[0];
-  });
-  let idx=0;
-  for(const b of mixed){
-    const c = col[0]<=col[1]?0:1;
-    const wBase = /^p\d+$/.test(b.k) ? [46,52,44,50][ (seed+idx)%4 ] : [40,44,42,38][ (seed+idx*3)%4 ];
-    const w=Math.min(wBase, 52);
-    const x = (c===0? M.l : 100-M.r-w) + (((seed+idx*7)%5)-2)*0.6;
-    let h;
-    if(b.k[0]==='p'){ h=pctH(w,1/b.aspect)+(b.cap?textH(b.cap,w,.56)+1.4:0)+1.2; }
-    else{ h=textH(b.len,w,.66)+1.6; }
-    if(col[c]+h > 100-M.b){
-      if(col[0]>100-M.b-6 && col[1]>100-M.b-6){ newPage(); }
-      else { /* 다른 단으로 */ }
+
+  mixed.forEach((b,idx)=>{
+    const isPic=/^p\d+$/.test(b.k);
+    const w=Math.min(COLW, isPic?[41,43,39,43][(seed+idx)%4]:[40,43,38,41][(seed+idx*3)%4]);
+    const h=isPic
+      ? w/(b.aspect||1.4)/PAGE_RATIO*100/100*PAGE_RATIO*0+ (w/(b.aspect||1.4))/PAGE_RATIO + (b.cap?textH(b.cap,w,.56)+1.6:0) + 1.4
+      : textH(b.len,w,.66)+1.8;
+    let c = col[0]<=col[1] ? 0 : 1;
+    if(col[c]+h > BOTTOM){
+      const o=1-c;
+      if(col[o]+h <= BOTTOM) c=o;
+      else { flush(); c=0; }
     }
-    const cc = col[0]<=col[1]?0:1;
-    if(col[cc]+h > 100-M.b){ newPage(); }
-    const c2 = col[0]<=col[1]?0:1;
-    const x2 = Math.max(M.l-2, Math.min(100-M.r-w+2,
-      (c2===0? M.l : 100-M.r-w) + (((seed+idx*7)%5)-2)*0.5));
-    const rot = b.k[0]==='p' ? (((seed+idx*13)%9)-4)*0.9 : 0;
-    items.push({id:uid(),k:b.k,x:+x2.toFixed(2),y:+col[c2].toFixed(2),w:+w.toFixed(2),rot:+rot.toFixed(2)});
-    col[c2]+=h+2.2;
-    idx++;
-  }
-  if(items.length) pages.push(items);
-  return pages;
+    const jitter=(((seed+idx*7)%5)-2)*0.5;
+    const rot=isPic ? (((seed+idx*13)%9)-4)*0.9 : 0;
+    cur.push({id:uid(),k:b.k,
+      x:+Math.max(M.l-1,Math.min(100-M.r-w+1, COLX[c]+jitter)).toFixed(2),
+      y:+col[c].toFixed(2), w:+w.toFixed(2), rot:+rot.toFixed(2)});
+    col[c]+=h+GAP;
+  });
+  flush();
+  return pages.length?pages:[[]];
 }
 function layoutValid(layout){
   return Array.isArray(layout) && layout.length>0 && layout.every(pg=>Array.isArray(pg));
@@ -871,6 +868,7 @@ function tripPagesHTML(t,who,label){
       <div class="pagetools">
         <button data-act="add-photo" data-id="${who}" data-page="${pi}">+ 사진</button>
         <button data-act="add-text" data-id="${who}" data-page="${pi}">+ 글</button>
+        <button data-act="del-page" data-id="${who}" data-page="${pi}">지면 삭제</button>
       </div>
       <div class="inner">${items.map(it=>tripItemHTML(it,t)).join('')}</div>
       <div class="pnum">${label}</div></div>`).join('');
@@ -889,8 +887,8 @@ async function renderPages(){
     <input id="pgphotos" type="file" accept="image/*" multiple hidden>
     <div class="pagewrap${state.edit?' editing':''}" id="pagewrap">`;
   pageSeq=[];
-  html+=tripPagesHTML(t,'__cover','표지'); pageSeq.push({type:'cover'});
-  if(t.prologue||(t.layoutPro&&t.layoutPro.length)){ html+=tripPagesHTML(t,'__pro','준비하며'); pageSeq.push({type:'prose'}); }
+  if(!t.hideCover){ html+=tripPagesHTML(t,'__cover','표지'); pageSeq.push({type:'cover'}); }
+  if(!t.hidePro&&(t.prologue||(t.layoutPro&&t.layoutPro.length))){ html+=tripPagesHTML(t,'__pro','준비하며'); pageSeq.push({type:'prose'}); }
   for(const e of state.entries){
     const photos=e.photoCount?await photosOf(e.id):[];
     const ratios=await Promise.all(photos.map(p=>measure(p.s)));
@@ -901,12 +899,13 @@ async function renderPages(){
         <div class="pagetools">
           <button data-act="add-photo" data-id="${e.id}" data-page="${pi}">+ 사진</button>
           <button data-act="add-text" data-id="${e.id}" data-page="${pi}">+ 글</button>
+          <button data-act="del-page" data-id="${e.id}" data-page="${pi}">지면 삭제</button>
         </div>
         <div class="inner">${items.map(it=>itemHTML(it,e,photos)).join('')}</div><div class="pnum">${e.date}</div></div>`;
       pageSeq.push({type:'day',entryId:e.id,pageIdx:pi});
     });
   }
-  if(t.epilogue||(t.layoutEpi&&t.layoutEpi.length)){ html+=tripPagesHTML(t,'__epi','마치며'); pageSeq.push({type:'prose'}); }
+  if(!t.hideEpi&&(t.epilogue||(t.layoutEpi&&t.layoutEpi.length))){ html+=tripPagesHTML(t,'__epi','마치며'); pageSeq.push({type:'prose'}); }
   html+='</div>';
   panel.innerHTML=html;
   await S.set(K.trips,state.trips);
@@ -1274,9 +1273,32 @@ async function saveNewText(){
   closeSheet(); await rerenderPages(false);
   toast('글을 넣었습니다. 끌어서 자리를 잡아 주세요.');
 }
+async function deletePage(who,pageIdx){
+  const t=trip();
+  if(who.startsWith('__')){
+    const name=who==='__cover'?'표지':who==='__pro'?'"여행을 준비하며"':'"여행을 마치며"';
+    if(!confirm(name+' 지면을 없앨까요? 적어둔 글은 남아 있고, 지면만 사라집니다.')) return;
+    if(who==='__cover'){ t.hideCover=true; t.layoutCover=[]; }
+    if(who==='__pro'){ t.hidePro=true; t.layoutPro=[]; }
+    if(who==='__epi'){ t.hideEpi=true; t.layoutEpi=[]; }
+    await S.set(K.trips,state.trips);
+  }else{
+    const e=state.entries.find(x=>x.id===who); if(!e) return;
+    if(!confirm('이 지면을 없앨까요? 사진과 글은 남아 있고, 자동 배치로 되돌리면 다시 나타납니다.')) return;
+    e.layout.splice(pageIdx,1);
+    if(!e.layout.length) e.layout=[[]];
+    await S.set(K.entries(state.tripId),state.entries);
+  }
+  state.sel=null; hideBar();
+  await rerenderPages(false);
+  toast('지면을 없앴습니다.');
+}
 async function relayout(){
   if(!confirm('이 여행의 모든 지면을 자동 배치로 되돌릴까요? 직접 옮긴 배치는 사라집니다.')) return;
   state.entries.forEach(e=>{ delete e.layout; });
+  const t0=trip();
+  if(t0){ delete t0.layoutCover; delete t0.layoutPro; delete t0.layoutEpi;
+    t0.hideCover=false; t0.hidePro=false; t0.hideEpi=false; await S.set(K.trips,state.trips); }
   await S.set(K.entries(state.tripId),state.entries);
   renderPages(); toast('자동 배치로 되돌렸습니다.');
 }
@@ -1378,7 +1400,13 @@ function sheet(h){$('#modal-root').innerHTML=`<div class="overlay" data-act="ove
 function openTripSheet(t){
   const e=t||{title:'',region:'',party:'',start:today(),end:'',prologue:'',epilogue:''};
   coverPicks=(t&&t.coverRefs)?[...t.coverRefs]:[];
-  sheet(`<h3>${t?'표지·서문 수정':'새 여행일지'}</h3>
+  sheet(`<h3>${t?'표지·서문 수정':'새로 기록하기'}</h3>
+    ${t?'':`<div class="field"><label>어떤 기록인가요?</label>
+      <div class="opts" data-group="kind">
+        <button type="button" class="opt" data-act="opt" data-group="kind" data-val="trip" aria-pressed="true">여행 (여러 날)</button>
+        <button type="button" class="opt" data-act="opt" data-group="kind" data-val="simple" aria-pressed="false">나들이 (하루 외출)</button>
+      </div>
+      <p class="hint">나들이는 표지와 서문 없이 사진과 이야기만 남깁니다. 나중에 여행으로 늘릴 수도 있어요.</p></div>`}
     <div class="field"><label for="f-title">제목</label><input id="f-title" type="text" value="${esc(e.title)}" placeholder="예: 여름 가족 여행"></div>
     <div class="field"><label for="f-region">지역</label><input id="f-region" type="text" value="${esc(e.region)}" placeholder="예: 경기도 양평, 인천 영종도"></div>
     <div class="row"><div class="field"><label for="f-start">시작일</label><input id="f-start" type="date" value="${e.start||''}"></div>
@@ -1409,7 +1437,8 @@ async function drawCoverPick(){
   }).join('');
 }
 async function saveTrip(id){
-  const title=$('#f-title').value.trim(); if(!title){toast('여행 제목을 입력해 주세요.');return;}
+  const title=$('#f-title').value.trim(); if(!title){toast('제목을 입력해 주세요.');return;}
+  const kind=$('#modal-root').querySelector('[data-group="kind"] [aria-pressed="true"]')?.dataset.val||'trip';
   const data={title,region:$('#f-region').value.trim(),party:$('#f-party').value.trim(),start:$('#f-start').value,end:$('#f-end').value,
     prologue:$('#f-pro').value.trim(),epilogue:$('#f-epi').value.trim()};
   if(id&&coverPicks.length){
@@ -1421,10 +1450,28 @@ async function saveTrip(id){
     data.covers=covers; data.coverRefs=[...coverPicks]; data.coverFixed=true;
   }
   if(id) Object.assign(state.trips.find(t=>t.id===id),data);
-  else{const t={id:uid(),entryCount:0,placeCount:0,covers:[],...data};state.trips.push(t);state.tripId=t.id;}
+  else{
+    const simple=kind==='simple';
+    if(simple){ data.end=data.start; }
+    const t={id:uid(),entryCount:0,placeCount:0,covers:[],simple,
+             hideCover:simple,hidePro:simple,hideEpi:simple,...data};
+    state.trips.push(t); state.tripId=t.id;
+  }
   await S.set(K.trips,state.trips); closeSheet();
   if(id){const y=window.scrollY; renderTrip(); setTimeout(()=>window.scrollTo(0,y),60); toast('저장했습니다.');}
-  else{await loadTrip(state.tripId);state.tab='pages';renderTrip();toast('여행일지를 만들었습니다.');}
+  else{
+    await loadTrip(state.tripId);
+    const t=trip();
+    if(t&&t.simple){
+      const e={id:uid(),date:t.start||today(),title:t.title,body:'',course:[],weather:'',mood:'',
+               placeIds:[],photoCount:0,shots:[]};
+      state.entries=[e];
+      await S.set(K.entries(t.id),state.entries);
+      t.entryCount=1; await S.set(K.trips,state.trips);
+    }
+    state.tab='pages'; renderTrip();
+    toast(trip()&&trip().simple?'나들이 기록을 만들었습니다. 지면에서 + 사진을 눌러 넣어 보세요.':'여행일지를 만들었습니다.');
+  }
 }
 async function deleteTrip(){
   const id=state.tripId; if(!id)return;
@@ -1643,6 +1690,16 @@ document.addEventListener('click',async ev=>{
     case 'save-tripitem': await saveTripItem(el.dataset.kind, +(el.dataset.i||0)); break;
     case 'add-photo': state.addTarget={entryId:id,pageIdx:+el.dataset.page}; $('#pgphotos')?.click(); break;
     case 'add-text': openAddTextSheet(id,+el.dataset.page); break;
+    case 'del-page': await deletePage(id,+el.dataset.page); break;
+    case 'restore-pages': {
+      const t=trip(); if(!t) break;
+      t.hideCover=false; t.hidePro=false; t.hideEpi=false;
+      if(!t.prologue) t.prologue=t.prologue||'';
+      await S.set(K.trips,state.trips);
+      state.tab='pages'; renderTrip();
+      toast('표지와 서문 지면을 되살렸습니다.');
+      break;
+    }
     case 'save-newtext': await saveNewText(); break;
     case 'pickcover': {
       const eid=el.dataset.eid, i=+el.dataset.i;
