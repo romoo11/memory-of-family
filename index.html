@@ -45,7 +45,11 @@ body.home .brand .tag{display:none}
 .btn.ghost:active{box-shadow:inset 0 2px 6px rgba(18,53,102,.18)}
 .btn.ghost::before{background:linear-gradient(to bottom,rgba(255,255,255,.95),rgba(255,255,255,0))}
 .btn.sm{padding:6px 12px;font-size:13px}
-.btn.danger{background:#fff;border-color:#E0BDBD;color:#B4483A}
+.btn.danger{color:#fff;border-color:rgba(255,255,255,.45);
+  background:linear-gradient(160deg,rgba(205,110,95,.95),rgba(150,55,42,.96));
+  box-shadow:inset 0 1px 2px rgba(255,255,255,.45), inset 0 -3px 7px rgba(0,0,0,.16), 0 5px 12px rgba(150,55,42,.28)}
+.btn.danger:hover{box-shadow:inset 0 1px 2px rgba(255,255,255,.45),0 9px 17px rgba(150,55,42,.32)}
+.btn.danger:active{box-shadow:inset 0 3px 7px rgba(0,0,0,.26)}
 .icon-btn{border:1px solid var(--line);background:#fff;border-radius:9px;width:32px;height:32px;display:grid;place-items:center;font-size:14px;color:var(--ink-soft)}
 .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:10px;margin:0 0 14px}
 .eyebrow::after{content:"";flex:1;height:1px;background:var(--line)}
@@ -679,6 +683,7 @@ function renderTrip(){
       <button class="btn ghost sm" data-act="new-place">장소 추가</button>
       <button class="btn ghost sm" data-act="edit-trip">표지·서문 수정</button>
       <button class="btn ghost sm" data-act="restore-pages">숨긴 지면 되살리기</button>
+      <button class="btn danger sm" data-act="del-trip">${t.simple?'나들이 삭제':'여행 삭제'}</button>
     </div>
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" data-act="tab" data-tab="pages" aria-selected="${state.tab==='pages'}">지면</button>
@@ -1416,7 +1421,7 @@ function openTripSheet(t){
     <div class="field"><label for="f-epi">여행을 마치며</label><textarea id="f-epi" style="min-height:80px">${esc(e.epilogue)}</textarea></div>
     ${t?`<div class="field"><label>표지 사진 (최대 3장)</label><div class="coverpick" id="coverpick">사진을 불러오는 중…</div>
       <p class="hint">고른 순서대로 표지에 놓입니다. 아무것도 고르지 않으면 기록의 앞선 사진이 자동으로 올라갑니다.</p></div>`:''}
-    <div class="sheet-actions">${t?`<button class="btn danger sm" data-act="del-trip">여행 삭제</button>`:''}
+    <div class="sheet-actions">
       <button class="btn ghost" data-act="cancel">취소</button><button class="btn" data-act="save-trip" data-id="${t?t.id:''}">저장</button></div>`);
   if(t) drawCoverPick();
 }
@@ -1475,11 +1480,13 @@ async function saveTrip(id){
 }
 async function deleteTrip(){
   const id=state.tripId; if(!id)return;
-  if(!confirm('이 여행의 기록과 사진이 모두 지워집니다. 삭제할까요?'))return;
+  const t=trip();
+  const label=t&&t.simple?'나들이':'여행';
+  if(!confirm(`이 ${label}의 기록과 사진이 모두 지워집니다. 되돌릴 수 없습니다.\n\n정말 삭제할까요?`))return;
   for(const e of await S.get(K.entries(id),[])) await S.del(K.photos(e.id));
   await S.del(K.entries(id)); await S.del(K.places(id));
   state.trips=state.trips.filter(t=>t.id!==id); await S.set(K.trips,state.trips);
-  closeSheet(); renderHome(); toast('여행일지를 삭제했습니다.');
+  closeSheet(); state.allPlaces=null; renderHome(); toast('삭제했습니다.');
 }
 async function syncTripMeta(){
   const t=trip(); if(!t)return;
