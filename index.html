@@ -190,6 +190,7 @@ body.home .brand .tag{display:none}
   max-width:min(94vw,760px);overflow-x:auto;scrollbar-width:none}
 .itembar::-webkit-scrollbar{display:none}
 .itembar button{white-space:nowrap;flex:0 0 auto}
+.selcount{color:#fff;font-size:12.5px;font-weight:700;padding:7px 10px;opacity:.85;white-space:nowrap}
 .itembar button{border:0;background:rgba(255,255,255,.14);color:#fff;border-radius:999px;padding:7px 12px;font-size:13px;font-weight:700}
 .itembar button:hover{background:rgba(255,255,255,.28)}
 
@@ -502,7 +503,7 @@ const parseCourse=s=>String(s||'').split(/→|->|⇒|>>/).map(x=>x.trim()).filte
 function hash(str){let h=0;for(let i=0;i<str.length;i++)h=(h*31+str.charCodeAt(i))|0;return Math.abs(h);}
 
 /* ============ 상태 ============ */
-const state={tripId:null,homeTab:'trips',hfilter:'all',allPlaces:null,tab:'pages',trips:[],entries:[],places:[],filter:'all',pickMode:false,edit:false,sel:null,photoCache:{}};
+const state={tripId:null,multi:false,sels:[],homeTab:'trips',hfilter:'all',allPlaces:null,tab:'pages',trips:[],entries:[],places:[],filter:'all',pickMode:false,edit:false,sel:null,photoCache:{}};
 const trip=()=>state.trips.find(t=>t.id===state.tripId);
 async function loadTrips(){state.trips=await S.get(K.trips,[]);}
 async function loadTrip(id){
@@ -885,10 +886,14 @@ async function renderPages(){
   let html=`<div class="pagebar">
       <button class="btn ghost sm" data-act="toggle-edit" aria-pressed="${state.edit}">${state.edit?'배치 끝내기':'배치 바꾸기'}</button>
       <button class="btn ghost sm" data-act="relayout">자동 배치로</button>
+      ${state.edit?`<button class="btn ghost sm" data-act="toggle-multi" aria-pressed="${state.multi}">${state.multi?'여러 개 고르는 중':'여러 개 고르기'}</button>`:''}
       <span class="grow"></span>
       <button class="btn ghost sm" data-act="print">인쇄 · PDF</button>
     </div>
-    <p class="pagehint">${state.edit?'끌면 자리가 옮겨지고, 한 번 누르면 모서리 손잡이로 크기(⤡)와 기울기(↻)를 바꿉니다. 아래 막대에서 글자 크기(가+/가−)와 폭을 조절하고, 글 고치기로 내용을 바로 수정합니다(항목을 두 번 눌러도 됩니다). ↑앞 지면 · ↓뒤 지면으로 다른 지면에 옮길 수 있습니다.':'페이지에서 만드셨던 것처럼 사진과 글이 지면에 배치됩니다. 마음에 안 들면 배치를 직접 바꿀 수 있어요.'}</p>
+    <p class="pagehint">${state.edit?(state.multi
+      ? '사진이나 글을 하나씩 눌러 여러 개를 고른 뒤, 함께 끌어 옮기거나 아래 막대로 한 번에 지면 이동·복사·빼기를 할 수 있습니다. 아래 "이 지면 모두"를 누르면 그 지면 전체가 선택됩니다.'
+      : '끌면 자리가 옮겨지고, 한 번 누르면 모서리 손잡이로 크기(⤡)와 기울기(↻)를 바꿉니다. 아래 막대에서 글자 크기와 폭을 조절하고, 글 고치기로 내용을 수정합니다. 여러 장을 한꺼번에 다루려면 위의 "여러 개 고르기"를 누르세요.')
+      : '페이지에서 만드셨던 것처럼 사진과 글이 지면에 배치됩니다. 마음에 안 들면 배치를 직접 바꿀 수 있어요.'}</p>
     <input id="pgphotos" type="file" accept="image/*" multiple hidden>
     <div class="pagewrap${state.edit?' editing':''}" id="pagewrap">`;
   pageSeq=[];
@@ -923,7 +928,7 @@ async function rerenderPages(keepSel,scrollToSel){
   await renderPages();
   window.scrollTo(0,y);
   if(keepSel&&sel){
-    state.sel=sel;
+    state.sels=[sel]; state.sel=sel;
     const el=[...$$('#pagewrap .page')].find(p=>p.dataset.entry===sel.entryId&&+p.dataset.page===sel.pageIdx)
       ?.querySelector(`.pitem[data-id="${sel.id}"]`);
     if(el){
@@ -942,11 +947,26 @@ window.addEventListener('resize',()=>{ if(state.tab==='pages') scalePages(); });
 
 /* --- 자유 배치: 옮기기 / 크기 / 회전 --- */
 let drag=null;
-function selectItem(item,page){
+function selKey(x){ return x.entryId+'|'+x.pageIdx+'|'+x.id; }
+function paintSel(){
   $$('.pitem.sel').forEach(x=>x.classList.remove('sel'));
-  item.classList.add('sel');
-  state.sel={entryId:page.dataset.entry,pageIdx:+page.dataset.page,id:item.dataset.id};
-  showBar();
+  state.sels.forEach(sl=>{
+    const el=[...$$('#pagewrap .page')].find(p=>p.dataset.entry===sl.entryId&&+p.dataset.page===sl.pageIdx)
+      ?.querySelector(`.pitem[data-id="${sl.id}"]`);
+    if(el) el.classList.add('sel');
+  });
+  state.sel=state.sels[0]||null;
+  if(state.sels.length) showBar(); else hideBar();
+}
+function selectItem(item,page){
+  const one={entryId:page.dataset.entry,pageIdx:+page.dataset.page,id:item.dataset.id};
+  if(state.multi){
+    const i=state.sels.findIndex(x=>selKey(x)===selKey(one));
+    if(i>=0) state.sels.splice(i,1); else state.sels.push(one);
+  }else{
+    state.sels=[one];
+  }
+  paintSel();
 }
 document.addEventListener('pointerdown',ev=>{
   if(!state.edit||state.tab!=='pages') return;
@@ -955,13 +975,21 @@ document.addEventListener('pointerdown',ev=>{
   ev.preventDefault();
   const handle=ev.target.closest('.phandle');
   const mode=handle?handle.dataset.h:'move';
-  if(!handle) selectItem(item,page);
-  else if(!item.classList.contains('sel')) selectItem(item,page);
+  if(!handle){
+    if(!(state.multi&&item.classList.contains('sel'))) selectItem(item,page);
+  }else if(!item.classList.contains('sel')){ state.sels=[]; selectItem(item,page); }
   const r=page.getBoundingClientRect(), ir=item.getBoundingClientRect();
   const o={x:parseFloat(item.style.left)||0,y:parseFloat(item.style.top)||0,
            w:parseFloat(item.style.width)||30,
            rot:parseFloat((item.style.transform.match(/-?[\d.]+/)||[0])[0])||0};
-  drag={item,page,r,mode,o,cur:{...o},
+  const others=(mode==='move'&&state.sels.length>1)
+    ? state.sels.filter(sl=>sl.id!==item.dataset.id).map(sl=>{
+        const el=[...$$('#pagewrap .page')].find(p=>p.dataset.entry===sl.entryId&&+p.dataset.page===sl.pageIdx)
+          ?.querySelector(`.pitem[data-id="${sl.id}"]`);
+        return el?{sl,el,x:parseFloat(el.style.left)||0,y:parseFloat(el.style.top)||0}:null;
+      }).filter(Boolean)
+    : [];
+  drag={item,page,r,mode,o,others,cur:{...o},
         sx:ev.clientX,sy:ev.clientY,
         cx:ir.left+ir.width/2, cy:ir.top+ir.height/2,
         a0:Math.atan2(ev.clientY-(ir.top+ir.height/2), ev.clientX-(ir.left+ir.width/2))};
@@ -975,6 +1003,10 @@ document.addEventListener('pointermove',ev=>{
     cur.x=Math.max(-8,Math.min(100,o.x+dx));
     cur.y=Math.max(-6,Math.min(100,o.y+dy));
     item.style.left=cur.x.toFixed(2)+'%'; item.style.top=cur.y.toFixed(2)+'%';
+    drag.others.forEach(o2=>{
+      o2.el.style.left=Math.max(-8,Math.min(100,o2.x+dx)).toFixed(2)+'%';
+      o2.el.style.top=Math.max(-6,Math.min(100,o2.y+dy)).toFixed(2)+'%';
+    });
   }else if(mode==='size'){
     const dx=(ev.clientX-drag.sx)/r.width*100;
     cur.w=Math.max(8,Math.min(96,o.w+dx*1.7));
@@ -991,6 +1023,10 @@ document.addEventListener('pointerup',async ()=>{
   if(it){
     it.x=+drag.cur.x.toFixed(2); it.y=+drag.cur.y.toFixed(2);
     it.w=+drag.cur.w.toFixed(2); it.rot=+drag.cur.rot.toFixed(1);
+    drag.others.forEach(o2=>{
+      const t2=findItem(o2.sl.entryId,o2.sl.pageIdx,o2.sl.id);
+      if(t2){ t2.x=+parseFloat(o2.el.style.left).toFixed(2); t2.y=+parseFloat(o2.el.style.top).toFixed(2); }
+    });
     await saveLayout();
   }
   drag=null;
@@ -1015,8 +1051,10 @@ async function saveLayout(){
   await S.set(K.trips,state.trips);
 }
 function showBar(){
+  const n=state.sels.length;
   $('#bar-root').innerHTML=`<div class="itembar">
-    <button data-act="it" data-op="edit">글 고치기</button>
+    ${n>1?`<span class="selcount">${n}개 선택</span>`:''}
+    ${state.sels.length>1?'':'<button data-act="it" data-op="edit">글 고치기</button>'}
     <button data-act="it" data-op="pgup">↑ 앞 지면</button>
     <button data-act="it" data-op="pgdn">↓ 뒤 지면</button>
     <button data-act="it" data-op="copy">복사</button>
@@ -1028,65 +1066,95 @@ function showBar(){
     <button data-act="it" data-op="front">맨 앞</button>
     <button data-act="it" data-op="del">지면에서 빼기</button>
     <button data-act="it" data-op="done">선택 해제</button>
+    ${state.multi?'<button data-act="it" data-op="all">이 지면 모두</button>':''}
   </div>`;
 }
 function hideBar(){ $('#bar-root').innerHTML=''; }
 async function itemOp(op){
-  if(!state.sel) return;
-  if(op==='done'){ state.sel=null; hideBar(); $$('.pitem.sel').forEach(x=>x.classList.remove('sel')); return; }
-  const isTrip=state.sel.entryId.startsWith('__');
-  const e=isTrip?trip():state.entries.find(x=>x.id===state.sel.entryId); if(!e) return;
-  const L=layoutOf(state.sel.entryId); if(!L) return;
-  const pg=L[state.sel.pageIdx]; if(!pg) return;
-  const idx=pg.findIndex(i=>i.id===state.sel.id); if(idx<0) return;
-  const it=pg[idx];
-
-  if(op==='edit'){ openItemTextSheet(e,it); return; }
-
-  // 지면 사이 이동 / 복사 / 빼기 — 다시 그린다
-  if(op==='pgup'||op==='pgdn'||op==='copy'||op==='del'){
-    if(op==='del'){
-      pg.splice(idx,1);
-      if(!L.length||L.every(p=>!p.length)) L.length&&L.splice(0,L.length,[]);
-      state.sel=null; hideBar();
-      toast('지면에서 뺐습니다. 사진 자체는 남아 있습니다.');
-    }else if(op==='copy'){
-      const copy=Object.assign({},it,{id:uid(),x:Math.min(88,it.x+4),y:Math.min(88,it.y+4)});
-      pg.push(copy); state.sel={...state.sel,id:copy.id};
-      toast('같은 지면에 복사했습니다. 앞/뒤 지면 버튼으로 옮길 수 있어요.');
-    }else{
-      const dir=op==='pgup'?-1:1;
-      let target=state.sel.pageIdx+dir;
-      if(target<0){ toast('첫 지면입니다.'); return; }
-      if(target>=L.length){ if(op==='pgdn') L.push([]); else return; }
-      pg.splice(idx,1);
-      L[target].push(it);
-      state.sel={entryId:e.id,pageIdx:target,id:it.id};
-      toast(dir<0?'앞 지면으로 옮겼습니다.':'뒤 지면으로 옮겼습니다.');
-    }
-    await saveLayout();
-    await rerenderPages(!!state.sel, op==='pgup'||op==='pgdn');
+  if(!state.sels.length) return;
+  if(op==='done'){ state.sels=[]; state.sel=null; hideBar(); $$('.pitem.sel').forEach(x=>x.classList.remove('sel')); return; }
+  if(op==='all'){
+    const first=state.sels[0];
+    const L=layoutOf(first.entryId);
+    if(L&&L[first.pageIdx]) state.sels=L[first.pageIdx].map(i=>({entryId:first.entryId,pageIdx:first.pageIdx,id:i.id}));
+    paintSel(); return;
+  }
+  if(op==='edit'){
+    const sl=state.sels[0];
+    const owner=sl.entryId.startsWith('__')?trip():state.entries.find(x=>x.id===sl.entryId);
+    const it=findItem(sl.entryId,sl.pageIdx,sl.id);
+    if(owner&&it) openItemTextSheet(owner,it);
     return;
   }
 
-  if(op==='w+') it.w=Math.min(92,+(it.w+4).toFixed(1));
-  if(op==='w-') it.w=Math.max(12,+(it.w-4).toFixed(1));
-  if(op==='r0') it.rot=0;
-  if(op==='fs+') it.fs=Math.min(3,+(((it.fs||1)+.12).toFixed(2)));
-  if(op==='fs-') it.fs=Math.max(.4,+(((it.fs||1)-.12).toFixed(2)));
-  if(op==='front') it.z=Math.max(0,...pg.map(i=>i.z||0))+1;
-  if(op==='edit') return;
-  const el=[...$$('#pagewrap .page')].find(p=>p.dataset.entry===state.sel.entryId&&+p.dataset.page===state.sel.pageIdx)
-            ?.querySelector(`.pitem[data-id="${state.sel.id}"]`);
-  if(el){
-    el.style.width=it.w+'%'; el.style.transform=`rotate(${it.rot||0}deg)`; if(it.z) el.style.zIndex=it.z;
-    if(op==='fs+'||op==='fs-'){
-      const cls=['covertitle','coverregion','coverdate','coverparty','title','course','text','photo'].find(c=>el.classList.contains(c));
-      if(cls==='photo'){ const cap=el.querySelector('figcaption'); if(cap) cap.style.fontSize=(FS_BASE.photo*(it.fs||1)).toFixed(3)+'em'; }
-      else if(cls) el.style.fontSize=(FS_BASE[cls]*(it.fs||1)).toFixed(3)+'em';
+  // 지면 이동 / 복사 / 빼기 — 여러 개를 한 번에
+  if(op==='pgup'||op==='pgdn'||op==='copy'||op==='del'){
+    const groups={};
+    state.sels.forEach(sl=>{ (groups[sl.entryId+'|'+sl.pageIdx] ||= []).push(sl); });
+    const newSels=[];
+    for(const key of Object.keys(groups)){
+      const [entryId,pageStr]=key.split('|'); const pageIdx=+pageStr;
+      const L=layoutOf(entryId); if(!L||!L[pageIdx]) continue;
+      const ids=groups[key].map(x=>x.id);
+      if(op==='del'){
+        L[pageIdx]=L[pageIdx].filter(i=>!ids.includes(i.id));
+        if(!L.length) L.push([]);
+      }else if(op==='copy'){
+        L[pageIdx].filter(i=>ids.includes(i.id)).forEach(i=>{
+          const c=Object.assign({},i,{id:uid(),x:Math.min(88,i.x+4),y:Math.min(88,i.y+4)});
+          L[pageIdx].push(c); newSels.push({entryId,pageIdx,id:c.id});
+        });
+      }else{
+        const dir=op==='pgup'?-1:1;
+        const target=pageIdx+dir;
+        if(target<0){ toast('첫 지면입니다.'); continue; }
+        while(L.length<=target) L.push([]);
+        const moving=L[pageIdx].filter(i=>ids.includes(i.id));
+        L[pageIdx]=L[pageIdx].filter(i=>!ids.includes(i.id));
+        moving.forEach(i=>{ L[target].push(i); newSels.push({entryId,pageIdx:target,id:i.id}); });
+      }
     }
+    if(op==='del'){ state.sels=[]; state.sel=null; hideBar(); toast('지면에서 뺐습니다. 사진 자체는 남아 있습니다.'); }
+    else{ state.sels=newSels; toast(op==='copy'?'복사했습니다.':(op==='pgup'?'앞 지면으로 옮겼습니다.':'뒤 지면으로 옮겼습니다.')); }
+    await saveLayout();
+    await rerenderPagesMulti(op==='pgup'||op==='pgdn');
+    return;
   }
+
+  // 크기 · 기울기 · 글자 · 앞으로
+  state.sels.forEach(sl=>{
+    const it=findItem(sl.entryId,sl.pageIdx,sl.id); if(!it) return;
+    const L=layoutOf(sl.entryId), pg=L&&L[sl.pageIdx]||[];
+    if(op==='w+') it.w=Math.min(92,+(it.w+4).toFixed(1));
+    if(op==='w-') it.w=Math.max(12,+(it.w-4).toFixed(1));
+    if(op==='r0') it.rot=0;
+    if(op==='fs+') it.fs=Math.min(3,+(((it.fs||1)+.12).toFixed(2)));
+    if(op==='fs-') it.fs=Math.max(.4,+(((it.fs||1)-.12).toFixed(2)));
+    if(op==='front') it.z=Math.max(0,...pg.map(i=>i.z||0))+1;
+    const el=[...$$('#pagewrap .page')].find(p=>p.dataset.entry===sl.entryId&&+p.dataset.page===sl.pageIdx)
+      ?.querySelector(`.pitem[data-id="${sl.id}"]`);
+    if(el){
+      el.style.width=it.w+'%'; el.style.transform=`rotate(${it.rot||0}deg)`; if(it.z) el.style.zIndex=it.z;
+      if(op==='fs+'||op==='fs-'){
+        const cls=['covertitle','coverregion','coverdate','coverparty','title','course','text','photo'].find(c=>el.classList.contains(c));
+        if(cls==='photo'){ const cap=el.querySelector('figcaption'); if(cap) cap.style.fontSize=(FS_BASE.photo*(it.fs||1)).toFixed(3)+'em'; }
+        else if(cls) el.style.fontSize=(FS_BASE[cls]*(it.fs||1)).toFixed(3)+'em';
+      }
+    }
+  });
   await saveLayout();
+}
+async function rerenderPagesMulti(scrollToSel){
+  const y=window.scrollY, keep=state.sels.map(x=>({...x}));
+  await renderPages();
+  window.scrollTo(0,y);
+  state.sels=keep.filter(sl=>findItem(sl.entryId,sl.pageIdx,sl.id));
+  paintSel();
+  if(scrollToSel&&state.sels[0]){
+    const el=[...$$('#pagewrap .page')].find(p=>p.dataset.entry===state.sels[0].entryId&&+p.dataset.page===state.sels[0].pageIdx)
+      ?.querySelector(`.pitem[data-id="${state.sels[0].id}"]`);
+    if(el){ const r=el.getBoundingClientRect(); if(r.top<70||r.bottom>window.innerHeight-90) el.scrollIntoView({block:'center',behavior:'smooth'}); }
+  }
 }
 function openItemTextSheet(entry,it){
   const k=it.k;
@@ -1199,6 +1267,65 @@ async function saveItemText(kind,i){
   await rerenderPages(true,false);
   toast('고쳤습니다.');
 }
+function estimateItemH(it,ctx){
+  const w=it.w||40;
+  if(/^p\d+$/.test(it.k)){
+    const i=+it.k.slice(1), ph=(ctx.photos||[])[i];
+    const ar=(ctx.ratios&&ctx.ratios[i])||1.4;
+    return (w/ar)/PAGE_RATIO + ((ph&&ph.c)?textH(ph.c.length,w,.56)+1.6:0) + 1.4;
+  }
+  if(/^c\d+$/.test(it.k)) return (w/1.4)/PAGE_RATIO + 1.4;
+  if(it.k==='title'||it.k==='t:head-pro'||it.k==='t:head-epi') return 9*(it.fs||1);
+  if(it.k==='course') return 8*(it.fs||1);
+  if(it.k==='t:title') return 12*(it.fs||1);
+  if(it.k==='t:region'||it.k==='t:date') return 6*(it.fs||1);
+  if(it.k==='t:party') return 9*(it.fs||1);
+  if(/^t\d+$/.test(it.k)){
+    const parts=(ctx.body||'').split(/\n{2,}/).map(x=>x.trim()).filter(Boolean);
+    return textH((parts[+it.k.slice(1)]||'').length,w,.66*(it.fs||1))+1.8;
+  }
+  if(/^n\d+$/.test(it.k)) return textH(((ctx.notes||[])[+it.k.slice(1)]||'').length,w,.66*(it.fs||1))+1.8;
+  if(it.k==='t:pro') return textH((ctx.prologue||'').length,w,.66*(it.fs||1))+1.8;
+  if(it.k==='t:epi') return textH((ctx.epilogue||'').length,w,.66*(it.fs||1))+1.8;
+  return 12;
+}
+/* 새 사진을 빈 자리에 흘려 담고, 자리가 없으면 지면을 늘린다 */
+async function flowAddPhotos(entryId,startPage,newKeys,ratios,ctx){
+  const L=layoutOf(entryId); if(!L) return 0;
+  const COLX=[M.l,51], W=41, BOTTOM=100-M.b, GAP=2.4;
+  const bottomsOf=pi=>{
+    const b=[M.t,M.t];
+    (L[pi]||[]).forEach(it=>{
+      const c=(it.x||0)<48?0:1;
+      const h=estimateItemH(it,ctx);
+      if(it.w>60){ const v=it.y+h+GAP; b[0]=Math.max(b[0],v); b[1]=Math.max(b[1],v); }
+      else b[c]=Math.max(b[c],it.y+h+GAP);
+    });
+    return b;
+  };
+  let pi=startPage, b=bottomsOf(pi), added=0;
+  newKeys.forEach((k,n)=>{
+    const ar=ratios[n]||1.4;
+    const h=(W/ar)/PAGE_RATIO+1.4;
+    let c=b[0]<=b[1]?0:1;
+    if(b[c]+h>BOTTOM){
+      const o=1-c;
+      if(b[o]+h<=BOTTOM) c=o;
+      else{
+        pi++;
+        while(L.length<=pi) L.push([]);
+        b=bottomsOf(pi); c=0;
+      }
+    }
+    const jit=((n*7)%5-2)*0.5;
+    L[pi].push({id:uid(),k,
+      x:+Math.max(M.l-1,Math.min(100-M.r-W+1,COLX[c]+jit)).toFixed(2),
+      y:+b[c].toFixed(2), w:W, rot:+(((n*13)%9-4)*0.9).toFixed(2)});
+    b[c]+=h+GAP; added++;
+  });
+  await saveLayout();
+  return added;
+}
 async function addItemToPage(entryId,pageIdx,item){
   const L=layoutOf(entryId); if(!L) return;
   while(L.length<=pageIdx) L.push([]);
@@ -1213,41 +1340,49 @@ async function onAddPhotos(ev){
   const tgt=state.addTarget; if(!tgt) return;
   toast('사진을 정리하는 중…');
   if(tgt.entryId.startsWith('__')){
-    const t=trip(); t.covers=t.covers||[]; let n=0;
+    const t=trip(); t.covers=t.covers||[]; const keys=[], rats=[];
     for(const f of files){
       try{
-        t.covers.push(await readImage(f,900,.7));
-        await addItemToPage(tgt.entryId,tgt.pageIdx,{k:'c'+(t.covers.length-1)});
-        n++;
+        const src=await readImage(f,900,.7);
+        t.covers.push(src); keys.push('c'+(t.covers.length-1));
+        rats.push(await measure(src));
       }catch(e){ toast('사진 한 장을 읽지 못했습니다.'); }
     }
+    if(!keys.length) return;
     t.coverFixed=true;
+    const before=(layoutOf(tgt.entryId)||[]).length;
+    const n=await flowAddPhotos(tgt.entryId,tgt.pageIdx,keys,rats,{});
     await S.set(K.trips,state.trips);
     await rerenderPages(false);
-    toast(`사진 ${n}장을 넣었습니다. 끌어서 자리를 잡아 주세요.`);
+    const grew=(layoutOf(tgt.entryId)||[]).length-before;
+    toast(`사진 ${n}장을 넣었습니다.${grew>0?` 지면 ${grew}장이 늘었습니다.`:''}`);
     return;
   }
   const e=state.entries.find(x=>x.id===tgt.entryId); if(!e) return;
   const photos=await photosOf(e.id);
-  let added=0;
+  const keys=[], rats=[];
   for(const f of files){
     try{
       const src=await readImage(f,1200,.72);
       photos.push({s:src,c:''});
-      await addItemToPage(e.id,tgt.pageIdx,{k:'p'+(photos.length-1)});
-      added++;
+      keys.push('p'+(photos.length-1));
+      rats.push(await measure(src));
     }catch(err){ toast('사진 한 장을 읽지 못했습니다.'); }
   }
-  if(!added) return;
+  if(!keys.length) return;
   state.photoCache[e.id]=photos;
   e.photoCount=photos.length;
   e.shots=[];
   for(const ph of photos.slice(0,3)) e.shots.push({s:(await shrink(ph.s,320,.6))||ph.s,c:ph.c||''});
+  const ratiosAll=await Promise.all(photos.map(x=>measure(x.s)));
+  const before=(layoutOf(e.id)||[]).length;
+  const added=await flowAddPhotos(e.id,tgt.pageIdx,keys,rats,{photos,ratios:ratiosAll,body:e.body});
   await S.set(K.photos(e.id),photos);
   await S.set(K.entries(state.tripId),state.entries);
   await syncTripMeta();
   await rerenderPages(false);
-  toast(`사진 ${added}장을 이 지면에 넣었습니다. 끌어서 자리를 잡아 주세요.`);
+  const grew=(layoutOf(e.id)||[]).length-before;
+    toast(`사진 ${added}장을 넣었습니다.${grew>0?` 지면 ${grew}장이 늘었습니다.`:''}`);
 }
 function openAddTextSheet(entryId,pageIdx){
   state.addTarget={entryId,pageIdx};
@@ -1690,7 +1825,8 @@ document.addEventListener('click',async ev=>{
     case 'open': await loadTrip(id); state.tab='pages'; state.filter='all'; renderTrip(); break;
     case 'tab': state.tab=el.dataset.tab; state.pickMode=false; renderTrip(); break;
     case 'filter': state.filter=el.dataset.cat; renderTab(); break;
-    case 'toggle-edit': state.edit=!state.edit; renderPages(); break;
+    case 'toggle-edit': state.edit=!state.edit; state.multi=false; state.sels=[]; state.sel=null; hideBar(); renderPages(); break;
+    case 'toggle-multi': state.multi=!state.multi; if(!state.multi&&state.sels.length>1){state.sels=state.sels.slice(0,1);} paintSel(); renderPages().then(paintSel); break;
     case 'relayout': await relayout(); break;
     case 'it': await itemOp(el.dataset.op); break;
     case 'save-itemtext': await saveItemText(el.dataset.kind, +(el.dataset.i||0)); break;
