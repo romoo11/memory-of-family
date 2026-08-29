@@ -886,13 +886,11 @@ async function renderPages(){
   let html=`<div class="pagebar">
       <button class="btn ghost sm" data-act="toggle-edit" aria-pressed="${state.edit}">${state.edit?'배치 끝내기':'배치 바꾸기'}</button>
       <button class="btn ghost sm" data-act="relayout">자동 배치로</button>
-      ${state.edit?`<button class="btn ghost sm" data-act="toggle-multi" aria-pressed="${state.multi}">${state.multi?'여러 개 고르는 중':'여러 개 고르기'}</button>`:''}
       <span class="grow"></span>
       <button class="btn ghost sm" data-act="print">인쇄 · PDF</button>
     </div>
-    <p class="pagehint">${state.edit?(state.multi
-      ? '사진이나 글을 하나씩 눌러 여러 개를 고른 뒤, 함께 끌어 옮기거나 아래 막대로 한 번에 지면 이동·복사·빼기를 할 수 있습니다. 아래 "이 지면 모두"를 누르면 그 지면 전체가 선택됩니다.'
-      : '끌면 자리가 옮겨지고, 한 번 누르면 모서리 손잡이로 크기(⤡)와 기울기(↻)를 바꿉니다. 아래 막대에서 글자 크기와 폭을 조절하고, 글 고치기로 내용을 수정합니다. 여러 장을 한꺼번에 다루려면 위의 "여러 개 고르기"를 누르세요.')
+    <p class="pagehint">${state.edit
+      ? '사진이나 글을 눌러 고르고 끌면 자리가 옮겨집니다. 여러 장을 차례로 누르면 함께 골라져 한 번에 옮기거나 지울 수 있고, 고른 것을 다시 누르면 빠집니다. 빈 곳을 누르면 모두 해제됩니다.'
       : '페이지에서 만드셨던 것처럼 사진과 글이 지면에 배치됩니다. 마음에 안 들면 배치를 직접 바꿀 수 있어요.'}</p>
     <input id="pgphotos" type="file" accept="image/*" multiple hidden>
     <div class="pagewrap${state.edit?' editing':''}" id="pagewrap">`;
@@ -960,29 +958,34 @@ function paintSel(){
 }
 function selectItem(item,page){
   const one={entryId:page.dataset.entry,pageIdx:+page.dataset.page,id:item.dataset.id};
-  if(state.multi){
-    const i=state.sels.findIndex(x=>selKey(x)===selKey(one));
-    if(i>=0) state.sels.splice(i,1); else state.sels.push(one);
-  }else{
-    state.sels=[one];
-  }
+  const i=state.sels.findIndex(x=>selKey(x)===selKey(one));
+  if(i>=0) state.sels.splice(i,1);          // 이미 고른 것을 다시 누르면 해제
+  else state.sels.push(one);                 // 누를 때마다 쌓인다
   paintSel();
 }
+let dragWasSel=false, dragMoved=false;
 document.addEventListener('pointerdown',ev=>{
   if(!state.edit||state.tab!=='pages') return;
-  const item=ev.target.closest('.pitem'); if(!item) return;
+  const item=ev.target.closest('.pitem');
+  if(!item){
+    if(ev.target.closest('.page')&&!ev.target.closest('.pagetools')&&state.sels.length){
+      state.sels=[]; paintSel();
+    }
+    return;
+  }
   const page=item.closest('.page'); if(!page||!page.dataset.entry) return;
   ev.preventDefault();
   const handle=ev.target.closest('.phandle');
   const mode=handle?handle.dataset.h:'move';
-  if(!handle){
-    if(!(state.multi&&item.classList.contains('sel'))) selectItem(item,page);
-  }else if(!item.classList.contains('sel')){ state.sels=[]; selectItem(item,page); }
+  const already=item.classList.contains('sel');
+  if(!already) selectItem(item,page);
+  dragWasSel=already && !handle;   // 이미 고른 것을 눌렀다 — 끌지 않으면 해제
+  dragMoved=false;
   const r=page.getBoundingClientRect(), ir=item.getBoundingClientRect();
   const o={x:parseFloat(item.style.left)||0,y:parseFloat(item.style.top)||0,
            w:parseFloat(item.style.width)||30,
            rot:parseFloat((item.style.transform.match(/-?[\d.]+/)||[0])[0])||0};
-  const others=(mode==='move'&&state.sels.length>1)
+  const others=(mode==='move'&&state.sels.length>1&&item.classList.contains('sel'))
     ? state.sels.filter(sl=>sl.id!==item.dataset.id).map(sl=>{
         const el=[...$$('#pagewrap .page')].find(p=>p.dataset.entry===sl.entryId&&+p.dataset.page===sl.pageIdx)
           ?.querySelector(`.pitem[data-id="${sl.id}"]`);
@@ -998,6 +1001,7 @@ document.addEventListener('pointerdown',ev=>{
 document.addEventListener('pointermove',ev=>{
   if(!drag) return;
   const {item,r,cur,o,mode}=drag;
+  if(Math.abs(ev.clientX-drag.sx)>3||Math.abs(ev.clientY-drag.sy)>3) dragMoved=true;
   if(mode==='move'){
     const dx=(ev.clientX-drag.sx)/r.width*100, dy=(ev.clientY-drag.sy)/r.height*100;
     cur.x=Math.max(-8,Math.min(100,o.x+dx));
@@ -1019,6 +1023,13 @@ document.addEventListener('pointermove',ev=>{
 });
 document.addEventListener('pointerup',async ()=>{
   if(!drag) return;
+  if(dragWasSel&&!dragMoved){                    // 고른 것을 다시 눌러 해제
+    const one={entryId:drag.page.dataset.entry,pageIdx:+drag.page.dataset.page,id:drag.item.dataset.id};
+    const i=state.sels.findIndex(x=>selKey(x)===selKey(one));
+    if(i>=0){ state.sels.splice(i,1); paintSel(); }
+    drag=null; dragWasSel=false; return;
+  }
+  dragWasSel=false;
   const it=findItem(drag.page.dataset.entry,+drag.page.dataset.page,drag.item.dataset.id);
   if(it){
     it.x=+drag.cur.x.toFixed(2); it.y=+drag.cur.y.toFixed(2);
@@ -1066,7 +1077,7 @@ function showBar(){
     <button data-act="it" data-op="front">맨 앞</button>
     <button data-act="it" data-op="del">지면에서 빼기</button>
     <button data-act="it" data-op="done">선택 해제</button>
-    ${state.multi?'<button data-act="it" data-op="all">이 지면 모두</button>':''}
+    <button data-act="it" data-op="all">이 지면 모두</button>
   </div>`;
 }
 function hideBar(){ $('#bar-root').innerHTML=''; }
@@ -1825,8 +1836,7 @@ document.addEventListener('click',async ev=>{
     case 'open': await loadTrip(id); state.tab='pages'; state.filter='all'; renderTrip(); break;
     case 'tab': state.tab=el.dataset.tab; state.pickMode=false; renderTrip(); break;
     case 'filter': state.filter=el.dataset.cat; renderTab(); break;
-    case 'toggle-edit': state.edit=!state.edit; state.multi=false; state.sels=[]; state.sel=null; hideBar(); renderPages(); break;
-    case 'toggle-multi': state.multi=!state.multi; if(!state.multi&&state.sels.length>1){state.sels=state.sels.slice(0,1);} paintSel(); renderPages().then(paintSel); break;
+    case 'toggle-edit': state.edit=!state.edit; state.sels=[]; state.sel=null; hideBar(); renderPages(); break;
     case 'relayout': await relayout(); break;
     case 'it': await itemOp(el.dataset.op); break;
     case 'save-itemtext': await saveItemText(el.dataset.kind, +(el.dataset.i||0)); break;
